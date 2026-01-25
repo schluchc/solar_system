@@ -51,7 +51,7 @@ class Body(Entity):
         self.orbit_parent = orbit_parent
         self.orbit_radius = orbit_radius_au * AU
         if self.orbit_parent:
-            min_orbit = self.orbit_parent.scale_x * 1.2
+            min_orbit = self.orbit_parent.scale_x + (self.scale_x * 1.6)
             self.orbit_radius = max(self.orbit_radius, min_orbit)
         self.orbit_period_days = orbit_period_days
         self.rotation_period_days = rotation_period_days
@@ -212,7 +212,7 @@ planets = [
 moon = Body(
     name="Moon",
     radius=0.1,
-    visual_scale=1.0,
+    visual_scale=0.6,
     orbit_radius_au=0.08,
     orbit_period_days=27.3,
     rotation_period_days=None,
@@ -251,7 +251,7 @@ for name, parent, orbit_radius_au, orbit_period_days, radius, body_color in moon
         Body(
             name=name,
             radius=radius,
-            visual_scale=1.0,
+            visual_scale=0.6,
             orbit_radius_au=orbit_radius_au,
             orbit_period_days=orbit_period_days,
             rotation_period_days=None,
@@ -310,6 +310,10 @@ MOVE_SPEED = 12.0
 LOOK_SPEED = 80.0
 LOOK_BOOST = 2.5
 LOOK_DEADZONE = 0.0015
+ACCELERATION = 20.0
+DAMPING = 2.8
+MAX_SPEED = 40.0
+ROLL_SPEED = 70.0
 
 time_scale = TIME_SCALE_DEFAULT
 paused = False
@@ -319,6 +323,7 @@ use_absolute_mouse = True
 last_mouse_pos = Vec3(0, 0, 0)
 focus_target = None
 focus_offset = Vec3(0, 0, 0)
+velocity = Vec3(0, 0, 0)
 
 
 focus_targets = {
@@ -353,10 +358,6 @@ def input(key):
 
     if key == "space":
         paused = not paused
-    elif key == "z":
-        camera.position += camera.forward * ZOOM_STEP
-    elif key == "x":
-        camera.position -= camera.forward * ZOOM_STEP
     elif key == "escape":
         if not use_absolute_mouse:
             mouse.locked = not mouse.locked
@@ -397,7 +398,7 @@ def closest_pair(bodies_to_compare):
 
 
 def update():
-    global look_x, look_y, last_mouse_pos, focus_target
+    global look_x, look_y, last_mouse_pos, focus_target, velocity
 
     if paused:
         dt_days = 0.0
@@ -406,7 +407,8 @@ def update():
 
     if use_absolute_mouse:
         delta = mouse.position - last_mouse_pos
-        last_mouse_pos = mouse.position
+        mouse.position = Vec3(0, 0, 0)
+        last_mouse_pos = Vec3(0, 0, 0)
         if abs(delta.x) < LOOK_DEADZONE:
             delta_x = 0.0
         else:
@@ -440,17 +442,30 @@ def update():
 
     move_dir = Vec3(
         held_keys["d"] - held_keys["a"],
-        0,
+        held_keys["r"] - held_keys["f"],
         held_keys["w"] - held_keys["s"],
     )
     if move_dir.length() > 0:
         if focus_target is not None:
             focus_target = None
-        forward = Vec3(camera_pivot.forward.x, 0, camera_pivot.forward.z).normalized()
-        right = Vec3(camera_pivot.right.x, 0, camera_pivot.right.z).normalized()
-        camera_pivot.position += (
-            (forward * move_dir.z + right * move_dir.x) * MOVE_SPEED * time.dt
-        )
+        forward = camera.forward.normalized()
+        right = camera.right.normalized()
+        up = camera.up.normalized()
+        thrust_dir = (right * move_dir.x + up * move_dir.y + forward * move_dir.z).normalized()
+        boost = 2.0 if held_keys["shift"] else 1.0
+        velocity += thrust_dir * ACCELERATION * boost * time.dt
+
+    if held_keys["z"]:
+        camera_pivot.rotation_z += ROLL_SPEED * time.dt
+    if held_keys["x"]:
+        camera_pivot.rotation_z -= ROLL_SPEED * time.dt
+
+    speed = velocity.length()
+    if speed > 0:
+        velocity -= velocity * min(1.0, DAMPING * time.dt)
+        if speed > MAX_SPEED:
+            velocity = velocity.normalized() * MAX_SPEED
+        camera_pivot.position += velocity * time.dt
 
     for body in bodies:
         body.step(dt_days)
@@ -473,7 +488,7 @@ def update():
     hud.text = (
         f"Time scale: {time_scale:.2f} days/sec ({status})\n"
         f"Closest planets: {closest_text}\n"
-        f"Controls: WASD move, mouse look ({mouse_status}), shift=fast look, z/x zoom, q/e speed, space pause, r reset, 1-9 focus, c clear focus, esc mouse, f fullscreen, b background"
+        f"Controls: WASD move, r/f up/down, z/x roll, mouse look ({mouse_status}), shift boost, q/e speed, space pause, r reset, 1-9 focus, c clear focus, esc mouse, f fullscreen, b background"
     )
 
 
