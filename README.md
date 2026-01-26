@@ -32,3 +32,6 @@ python main.py
 ## Textures
 
 Planet textures and the Milky Way sky are from Solar System Scope (https://www.solarsystemscope.com/textures/) and are provided under CC BY 4.0.
+Explosion sound: https://opengameart.org/content/explosion-0 (CC0).
+Earth heightmap: https://cdn.jsdelivr.net/gh/jeromeetienne/threex.planets@master/images/earthbump1k.jpg (NASA Visible Earth).
+HUD overlay: generated locally (assets/textures/hud_overlay.png).
