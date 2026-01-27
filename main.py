@@ -654,6 +654,11 @@ home_lon = AROSA_LON
 labels_enabled = False
 labels = []
 
+for ring, _, __ in orbit_rings:
+    ring.enabled = labels_enabled
+for ring, _, __ in planet_rings:
+    ring.enabled = labels_enabled
+
 
 focus_targets = {
     "1": sun,
@@ -736,6 +741,10 @@ def input(key):
         set_view_from_earth(AROSA_LAT, AROSA_LON)
     elif key == "n":
         labels_enabled = not labels_enabled
+        for ring, _, __ in orbit_rings:
+            ring.enabled = labels_enabled
+        for ring, _, __ in planet_rings:
+            ring.enabled = labels_enabled
         if labels_enabled:
             name_map = {
                 "Sun": "Sonne",
