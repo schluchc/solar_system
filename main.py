@@ -42,6 +42,7 @@ class Body(Entity):
         visual_scale=1.0,
         orbit_radius_au=0.0,
         orbit_eccentricity=0.0,
+        orbit_inclination_deg=0.0,
         orbit_period_days=None,
         rotation_period_days=None,
         orbit_parent=None,
@@ -60,6 +61,7 @@ class Body(Entity):
         self.orbit_parent = orbit_parent
         self.orbit_radius = orbit_radius_au * AU
         self.orbit_eccentricity = orbit_eccentricity
+        self.orbit_inclination_deg = orbit_inclination_deg
         if self.orbit_parent:
             min_orbit = self.orbit_parent.scale_x + (self.scale_x * 1.6)
             self.orbit_radius = max(self.orbit_radius, min_orbit)
@@ -91,7 +93,11 @@ class Body(Entity):
                 E -= (E - e * math.sin(E) - mean_anomaly) / (1 - e * math.cos(E))
             x = self.orbit_radius * (math.cos(E) - e)
             z = self.orbit_radius * math.sqrt(1 - e * e) * math.sin(E)
-            self.position = self.orbit_parent.position + Vec3(x, 0, z)
+            pos = Vec3(x, 0, z)
+            if self.orbit_inclination_deg:
+                inc = math.radians(self.orbit_inclination_deg)
+                pos = Vec3(pos.x, pos.z * math.sin(inc), pos.z * math.cos(inc))
+            self.position = self.orbit_parent.position + pos
 
         if self.tidally_locked and self.orbit_parent:
             self.look_at(self.orbit_parent)
@@ -438,6 +444,7 @@ moon = Body(
     visual_scale=0.6,
     orbit_radius_au=0.08,
     orbit_eccentricity=0.0549,
+    orbit_inclination_deg=5.145,
     orbit_period_days=27.3217,
     rotation_period_days=None,
     orbit_parent=planets[2],
@@ -450,28 +457,28 @@ moon.is_moon = True
 bodies = [sun] + planets + [moon]
 
 moon_defs = [
-    ("Phobos", planets[3], 0.00006, 0.32, 0.06, 0.0, color.rgb(160, 150, 140)),
-    ("Deimos", planets[3], 0.00016, 1.26, 0.05, 0.0, color.rgb(170, 160, 150)),
-    ("Io", planets[4], 0.0028, 1.76914, 0.09, 0.0, color.rgb(220, 200, 120)),
-    ("Europa", planets[4], 0.0045, 3.55118, 0.08, 0.0, color.rgb(200, 210, 230)),
-    ("Ganymede", planets[4], 0.0071, 7.15455, 0.11, 0.0, color.rgb(190, 180, 170)),
-    ("Callisto", planets[4], 0.0126, 16.68902, 0.1, 0.0, color.rgb(150, 140, 130)),
-    ("Titan", planets[5], 0.0082, 15.94542, 0.11, 0.0, color.rgb(210, 170, 120)),
-    ("Enceladus", planets[5], 0.0016, 1.37022, 0.05, 0.0, color.rgb(230, 230, 235)),
-    ("Rhea", planets[5], 0.0035, 4.51750, 0.08, 0.0, color.rgb(200, 200, 205)),
-    ("Iapetus", planets[5], 0.0238, 79.33018, 0.09, 0.0, color.rgb(170, 160, 150)),
-    ("Dione", planets[5], 0.0025, 2.74, 0.07, 0.0, color.rgb(210, 210, 215)),
-    ("Tethys", planets[5], 0.0020, 1.89, 0.06, 0.0, color.rgb(210, 210, 220)),
-    ("Titania", planets[6], 0.0029, 8.71, 0.09, 0.0, color.rgb(180, 170, 160)),
-    ("Oberon", planets[6], 0.0039, 13.46, 0.09, 0.0, color.rgb(170, 160, 150)),
-    ("Ariel", planets[6], 0.0013, 2.52, 0.07, 0.0, color.rgb(200, 190, 180)),
-    ("Umbriel", planets[6], 0.0018, 4.14, 0.07, 0.0, color.rgb(150, 140, 130)),
-    ("Miranda", planets[6], 0.0009, 1.41, 0.05, 0.0, color.rgb(190, 180, 170)),
-    ("Triton", planets[7], 0.0024, -5.87685, 0.1, 0.0, color.rgb(200, 210, 220)),
-    ("Proteus", planets[7], 0.0012, 1.12, 0.06, 0.0, color.rgb(150, 140, 130)),
+    ("Phobos", planets[3], 0.00006, 0.32, 0.06, 0.0, 1.093, color.rgb(160, 150, 140)),
+    ("Deimos", planets[3], 0.00016, 1.26, 0.05, 0.0, 0.93, color.rgb(170, 160, 150)),
+    ("Io", planets[4], 0.0028, 1.76914, 0.09, 0.0, 0.04, color.rgb(220, 200, 120)),
+    ("Europa", planets[4], 0.0045, 3.55118, 0.08, 0.0, 0.47, color.rgb(200, 210, 230)),
+    ("Ganymede", planets[4], 0.0071, 7.15455, 0.11, 0.0, 0.18, color.rgb(190, 180, 170)),
+    ("Callisto", planets[4], 0.0126, 16.68902, 0.1, 0.0, 0.19, color.rgb(150, 140, 130)),
+    ("Titan", planets[5], 0.0082, 15.94542, 0.11, 0.0, 0.30, color.rgb(210, 170, 120)),
+    ("Enceladus", planets[5], 0.0016, 1.37022, 0.05, 0.0, 0.03, color.rgb(230, 230, 235)),
+    ("Rhea", planets[5], 0.0035, 4.51750, 0.08, 0.0, 0.35, color.rgb(200, 200, 205)),
+    ("Iapetus", planets[5], 0.0238, 79.33018, 0.09, 0.0, 18.5, color.rgb(170, 160, 150)),
+    ("Dione", planets[5], 0.0025, 2.74, 0.07, 0.0, 0.01, color.rgb(210, 210, 215)),
+    ("Tethys", planets[5], 0.0020, 1.89, 0.06, 0.0, 1.10, color.rgb(210, 210, 220)),
+    ("Titania", planets[6], 0.0029, 8.71, 0.09, 0.0, 0.08, color.rgb(180, 170, 160)),
+    ("Oberon", planets[6], 0.0039, 13.46, 0.09, 0.0, 0.07, color.rgb(170, 160, 150)),
+    ("Ariel", planets[6], 0.0013, 2.52, 0.07, 0.0, 0.04, color.rgb(200, 190, 180)),
+    ("Umbriel", planets[6], 0.0018, 4.14, 0.07, 0.0, 0.13, color.rgb(150, 140, 130)),
+    ("Miranda", planets[6], 0.0009, 1.41, 0.05, 0.0, 4.34, color.rgb(190, 180, 170)),
+    ("Triton", planets[7], 0.0024, -5.87685, 0.1, 0.0, 157.345, color.rgb(200, 210, 220)),
+    ("Proteus", planets[7], 0.0012, 1.12, 0.06, 0.0, 0.04, color.rgb(150, 140, 130)),
 ]
 
-for name, parent, orbit_radius_au, orbit_period_days, radius, orbit_eccentricity, body_color in moon_defs:
+for name, parent, orbit_radius_au, orbit_period_days, radius, orbit_eccentricity, orbit_inclination_deg, body_color in moon_defs:
     m = Body(
             name=name,
             radius=radius,
@@ -480,6 +487,7 @@ for name, parent, orbit_radius_au, orbit_period_days, radius, orbit_eccentricity
             orbit_period_days=orbit_period_days,
             orbit_eccentricity=orbit_eccentricity,
             rotation_period_days=None,
+            orbit_inclination_deg=orbit_inclination_deg,
             orbit_parent=parent,
             body_color=body_color,
             tidally_locked=True,
@@ -567,12 +575,12 @@ for body in bodies:
 
 planet_rings = []
 ring_defs = [
-    (planets[4], 1.2, 1.5, color.rgba(200, 190, 170, 40), None),  # Jupiter faint ring
-    (planets[5], 1.3, 2.6, color.white, "textures/2k_saturn_ring_alpha.png"),  # Saturn
-    (planets[6], 1.2, 1.7, color.rgba(190, 210, 210, 50), None),  # Uranus
-    (planets[7], 1.3, 1.8, color.rgba(170, 180, 200, 40), None),  # Neptune
+    (planets[4], 1.2, 1.5, 3.13, color.rgba(200, 190, 170, 40), None),  # Jupiter faint ring
+    (planets[5], 1.3, 2.6, 26.73, color.white, "textures/2k_saturn_ring_alpha.png"),  # Saturn
+    (planets[6], 1.2, 1.7, 97.77, color.rgba(190, 210, 210, 50), None),  # Uranus
+    (planets[7], 1.3, 1.8, 28.32, color.rgba(170, 180, 200, 40), None),  # Neptune
 ]
-for planet, inner_mult, outer_mult, ring_color, ring_texture in ring_defs:
+for planet, inner_mult, outer_mult, tilt_deg, ring_color, ring_texture in ring_defs:
     inner_radius = planet.scale_x * inner_mult
     outer_radius = planet.scale_x * outer_mult
     ring = Entity(
@@ -582,7 +590,8 @@ for planet, inner_mult, outer_mult, ring_color, ring_texture in ring_defs:
         double_sided=True,
         position=planet.position,
     )
-    planet_rings.append((ring, planet))
+    ring.rotation_x = -tilt_deg
+    planet_rings.append((ring, planet, tilt_deg))
 
 random.seed(7)
 asteroids = []
@@ -917,9 +926,13 @@ def update():
         ring.position = parent.position
         if body.elements:
             ring.model = make_orbit_path_from_elements(body.elements, sim_jd)
+            ring.rotation = Vec3(0, 0, 0)
+        else:
+            ring.rotation_x = -body.orbit_inclination_deg
 
-    for ring, planet in planet_rings:
+    for ring, planet, tilt_deg in planet_rings:
         ring.position = planet.position
+        ring.rotation_x = -tilt_deg
 
     if labels_enabled:
         for body, label in labels:
@@ -935,13 +948,6 @@ def update():
             else:
                 label.enabled = True
 
-    closest = closest_pair(planets)
-    if closest:
-        a, b, dist = closest
-        closest_text = f"{a.name} - {b.name}: {dist / AU:.2f} AU"
-    else:
-        closest_text = "n/a"
-
     status = "paused" if paused else "running"
     if use_absolute_mouse:
         mouse_status = "absolute"
@@ -951,7 +957,6 @@ def update():
     hud.text = (
         f"Sim time (UTC): {sim_dt.strftime('%Y-%m-%d %H:%M')}\n"
         f"Time scale: {time_scale:.2f} days/sec ({status})\n"
-        f"Closest planets: {closest_text}\n"
         f"Controls: WASD move, r/f up/down, z/x roll, mouse look ({mouse_status}), shift boost, q/e speed, space pause, r reset, h home, 1-9 focus, n names, esc mouse, f fullscreen, b background"
     )
 
