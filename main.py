@@ -519,17 +519,51 @@ def make_orbit_ellipse_mesh(semi_major, eccentricity, segments=128):
         vertices.append(Vec3(x, 0, z))
     return Mesh(vertices=vertices, mode="line")
 
+def make_orbit_path_from_elements(elements, jd, segments=128):
+    T = (jd - 2451545.0) / 36525.0
+    a = (elements["a"] + elements["a_dot"] * T) * AU
+    e = elements["e"] + elements["e_dot"] * T
+    i = math.radians(elements["i"] + elements["i_dot"] * T)
+    Omega = math.radians(elements["Omega"] + elements["Omega_dot"] * T)
+    w = math.radians(elements["w"] + elements["w_dot"] * T)
+
+    cos_O = math.cos(Omega)
+    sin_O = math.sin(Omega)
+    cos_w = math.cos(w)
+    sin_w = math.sin(w)
+    cos_i = math.cos(i)
+    sin_i = math.sin(i)
+
+    vertices = []
+    for s in range(segments + 1):
+        M = TAU * s / segments
+        E = M
+        for _ in range(6):
+            E -= (E - e * math.sin(E) - M) / (1 - e * math.cos(E))
+        x_prime = a * (math.cos(E) - e)
+        y_prime = a * math.sqrt(1 - e * e) * math.sin(E)
+
+        x = (cos_O * cos_w - sin_O * sin_w * cos_i) * x_prime + (-cos_O * sin_w - sin_O * cos_w * cos_i) * y_prime
+        y = (sin_O * cos_w + cos_O * sin_w * cos_i) * x_prime + (-sin_O * sin_w + cos_O * cos_w * cos_i) * y_prime
+        z = (sin_w * sin_i) * x_prime + (cos_w * sin_i) * y_prime
+        vertices.append(Vec3(x, z, y))
+    return Mesh(vertices=vertices, mode="line")
+
 
 orbit_rings = []
 for body in bodies:
     if body is sun or not body.orbit_parent or body.orbit_radius <= 0:
         continue
+    if body.elements:
+        ring_model = make_orbit_path_from_elements(body.elements, julian_date(datetime(2026, 1, 16, tzinfo=timezone.utc)))
+    else:
+        ring_model = make_orbit_ellipse_mesh(body.orbit_radius, body.orbit_eccentricity)
     ring = Entity(
-        model=make_orbit_ellipse_mesh(body.orbit_radius, body.orbit_eccentricity),
+        model=ring_model,
         color=color.rgba(255, 255, 255, 40),
         position=body.orbit_parent.position,
     )
-    orbit_rings.append((ring, body.orbit_parent))
+    orbit_rings.append((ring, body.orbit_parent, body))
 
 planet_rings = []
 ring_defs = [
@@ -694,11 +728,42 @@ def input(key):
     elif key == "n":
         labels_enabled = not labels_enabled
         if labels_enabled:
+            name_map = {
+                "Sun": "Sonne",
+                "Mercury": "Merkur",
+                "Venus": "Venus",
+                "Earth": "Erde",
+                "Mars": "Mars",
+                "Jupiter": "Jupiter",
+                "Saturn": "Saturn",
+                "Uranus": "Uranus",
+                "Neptune": "Neptun",
+                "Moon": "Mond",
+                "Phobos": "Phobos",
+                "Deimos": "Deimos",
+                "Io": "Io",
+                "Europa": "Europa",
+                "Ganymede": "Ganymed",
+                "Callisto": "Kallisto",
+                "Titan": "Titan",
+                "Enceladus": "Enceladus",
+                "Rhea": "Rhea",
+                "Iapetus": "Japetus",
+                "Dione": "Dione",
+                "Tethys": "Tethys",
+                "Titania": "Titania",
+                "Oberon": "Oberon",
+                "Ariel": "Ariel",
+                "Umbriel": "Umbriel",
+                "Miranda": "Miranda",
+                "Triton": "Triton",
+                "Proteus": "Proteus",
+            }
             labels = [
                 (
                     body,
                     Text(
-                        text=body.name,
+                        text=name_map.get(body.name, body.name),
                         parent=camera.ui,
                         position=Vec3(0, 0, 0),
                         scale=1.8,
@@ -848,8 +913,10 @@ def update():
     for body in bodies:
         body.step(dt_days, jd=sim_jd)
 
-    for ring, parent in orbit_rings:
+    for ring, parent, body in orbit_rings:
         ring.position = parent.position
+        if body.elements:
+            ring.model = make_orbit_path_from_elements(body.elements, sim_jd)
 
     for ring, planet in planet_rings:
         ring.position = planet.position
