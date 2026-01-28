@@ -1,4 +1,4 @@
-from panda3d.core import loadPrcFileData
+from panda3d.core import loadPrcFileData, PointLight as PandaPointLight
 from pathlib import Path
 from PIL import Image
 from datetime import datetime, timezone
@@ -21,11 +21,11 @@ from ursina import (
     invoke,
     curve,
     Mesh,
-    PointLight,
 )
 
 loadPrcFileData("", "gl-version 2 1")
 loadPrcFileData("", "glsl-version 120")
+loadPrcFileData("", "want-default-light 0")
 import math
 import itertools
 import random
@@ -33,6 +33,8 @@ import random
 AU = 5.0  # world units per astronomical unit
 DEG_PER_TURN = 360.0
 TAU = math.tau
+SOLAR_SYSTEM_OFFSET = Vec3(180, 0, 60)
+USE_EARTH_CUSTOM_MESH = False
 
 
 class Body(Entity):
@@ -107,7 +109,7 @@ class Body(Entity):
             self.rotation_y = self.spin_angle
 
 
-def build_earth_mesh(heightmap_path, radius, height_scale, lon_steps=128, lat_steps=64):
+def build_earth_mesh(heightmap_path, radius, height_scale, lon_steps=128, lat_steps=64, flip_normals=False):
     heightmap_file = Path("assets") / heightmap_path
     if not heightmap_file.exists():
         print(f"missing heightmap: {heightmap_file}")
@@ -148,6 +150,12 @@ def build_earth_mesh(heightmap_path, radius, height_scale, lon_steps=128, lat_st
 
     # Avoid numpy dependency in generate_normals by approximating sphere normals.
     normals = [v.normalized() for v in vertices]
+    if flip_normals:
+        normals = [Vec3(-n.x, -n.y, -n.z) for n in normals]
+        flipped = []
+        for i in range(0, len(triangles), 3):
+            flipped.extend([triangles[i], triangles[i + 2], triangles[i + 1]])
+        triangles = flipped
     mesh = Mesh(vertices=vertices, triangles=triangles, uvs=uvs, normals=normals, mode="triangle")
     if hasattr(mesh, "generate_tangents"):
         try:
@@ -249,6 +257,7 @@ milky_way = Entity(
     texture="textures/8k_stars_milky_way.jpg",
     double_sided=True,
 )
+milky_way.setLightOff()
 
 starfield = Entity()
 random.seed(7)
@@ -269,6 +278,7 @@ for _ in range(1400):
         scale=size,
         position=Vec3(x, y, z),
     )
+    star.setLightOff()
 
 use_milky_way = True
 
@@ -280,7 +290,13 @@ sun = Body(
     rotation_period_days=25.0,
 )
 sun.is_moon = False
-sun_light = PointLight(parent=sun, position=Vec3(0, 0, 0), color=color.rgb(255, 244, 214), shadows=False)
+sun.setLightOff()
+sun_light = PandaPointLight("sun_light")
+sun_light.setColor(color.rgb(255, 244, 214))
+sun_light_np = sun.attachNewNode(sun_light)
+if application.base:
+    application.base.render.setLight(sun_light_np)
+camera.setLightOff()
 
 planets = [
     Body(
@@ -440,16 +456,18 @@ for planet in planets:
     planet.is_moon = False
 
 earth = planets[2]
-earth_mesh = build_earth_mesh(
-    "textures/earthbump1k.jpg",
-    radius=1.0,
-    height_scale=0.012,
-    lon_steps=96,
-    lat_steps=48,
-)
-if earth_mesh:
-    earth.model = earth_mesh
-    earth.texture = "textures/2k_earth_daymap.jpg"
+if USE_EARTH_CUSTOM_MESH:
+    earth_mesh = build_earth_mesh(
+        "textures/earthbump1k.jpg",
+        radius=1.0,
+        height_scale=0.012,
+        lon_steps=96,
+        lat_steps=48,
+        flip_normals=False,
+    )
+    if earth_mesh:
+        earth.model = earth_mesh
+        earth.texture = "textures/2k_earth_daymap.jpg"
 
 moon = Body(
     name="Moon",
@@ -626,6 +644,26 @@ for entity in scalable_entities:
     entity.base_scale = entity.scale
 
 
+def apply_sun_only_lighting():
+    if application.base:
+        application.base.render.clearLight()
+        application.base.render.setLight(sun_light_np)
+    camera.setLightOff()
+    camera.setLightOff()
+    for entity in bodies + asteroids:
+        if entity is sun:
+            entity.setLightOff()
+            continue
+        entity.setLightOff()
+        entity.setLight(sun_light_np)
+    for ring, *_ in planet_rings:
+        ring.setLightOff()
+        ring.setLight(sun_light_np)
+    for ring, _, __ in orbit_rings:
+        ring.setLightOff()
+        ring.setLight(sun_light_np)
+
+
 def apply_size_scale(scale_factor):
     for entity in scalable_entities:
         entity.scale = entity.base_scale * scale_factor
@@ -663,6 +701,7 @@ ROLL_SPEED = 70.0
 CAMERA_RADIUS = 0.05
 COLLISION_SPEED_MIN = 2.5
 REAL_SIZE_FACTOR = 0.05
+USE_EARTH_CUSTOM_MESH = False
 
 time_scale = TIME_SCALE_DEFAULT
 sim_jd = julian_date(datetime(2026, 1, 16, tzinfo=timezone.utc))
@@ -687,6 +726,8 @@ for ring, _, __ in orbit_rings:
     ring.enabled = labels_enabled
 for ring, *_ in planet_rings:
     ring.enabled = labels_enabled
+
+apply_sun_only_lighting()
 
 
 focus_targets = {
@@ -856,6 +897,9 @@ def spawn_explosion(position, size=1.0):
 
 def update():
     global look_x, look_y, last_mouse_pos, focus_target, velocity, home_follow, sim_jd
+    if application.base:
+        application.base.render.clearLight()
+        application.base.render.setLight(sun_light_np)
 
     if paused:
         dt_days = 0.0
