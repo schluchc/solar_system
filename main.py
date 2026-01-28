@@ -21,6 +21,7 @@ from ursina import (
     invoke,
     curve,
     Mesh,
+    PointLight,
 )
 
 loadPrcFileData("", "gl-version 2 1")
@@ -145,7 +146,15 @@ def build_earth_mesh(heightmap_path, radius, height_scale, lon_steps=128, lat_st
             i2 = i + lon_steps + 1
             triangles.extend([i, i2, i + 1, i + 1, i2, i2 + 1])
 
-    return Mesh(vertices=vertices, triangles=triangles, uvs=uvs, mode="triangle")
+    # Avoid numpy dependency in generate_normals by approximating sphere normals.
+    normals = [v.normalized() for v in vertices]
+    mesh = Mesh(vertices=vertices, triangles=triangles, uvs=uvs, normals=normals, mode="triangle")
+    if hasattr(mesh, "generate_tangents"):
+        try:
+            mesh.generate_tangents()
+        except Exception:
+            pass
+    return mesh
 
 
 def julian_date(dt):
@@ -227,6 +236,9 @@ window.exit_button.visible = False
 window.fps_counter.enabled = False
 window.fullscreen = True
 camera.clear_color = color.rgb(5, 8, 15)
+if application.base:
+    application.base.render.clearLight()
+    application.base.render.setShaderOff()
 
 explosion_sound = Audio("sounds/explosion.wav", autoplay=False)
 explosion_cooldown = 0.0
@@ -268,6 +280,7 @@ sun = Body(
     rotation_period_days=25.0,
 )
 sun.is_moon = False
+sun_light = PointLight(parent=sun, position=Vec3(0, 0, 0), color=color.rgb(255, 244, 214), shadows=False)
 
 planets = [
     Body(
