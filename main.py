@@ -591,7 +591,7 @@ for planet, inner_mult, outer_mult, tilt_deg, ring_color, ring_texture in ring_d
         position=planet.position,
     )
     ring.rotation_x = -tilt_deg
-    planet_rings.append((ring, planet, tilt_deg))
+    planet_rings.append((ring, planet, tilt_deg, inner_mult, outer_mult))
 
 random.seed(7)
 asteroids = []
@@ -607,6 +607,20 @@ for _ in range(260):
         position=Vec3(math.cos(angle) * radius_au * AU, height * AU, math.sin(angle) * radius_au * AU),
     )
     asteroids.append(asteroid)
+
+scalable_entities = bodies + asteroids
+for entity in scalable_entities:
+    entity.base_scale = entity.scale
+
+
+def apply_size_scale(scale_factor):
+    for entity in scalable_entities:
+        entity.scale = entity.base_scale * scale_factor
+    for ring, planet, tilt_deg, inner_mult, outer_mult in planet_rings:
+        inner_radius = planet.scale_x * inner_mult
+        outer_radius = planet.scale_x * outer_mult
+        ring.model = make_ring_mesh(inner_radius, outer_radius)
+        ring.rotation_x = -tilt_deg
 
 camera.fov = 70
 camera.position = Vec3(0, 0, 0)
@@ -635,6 +649,7 @@ MAX_SPEED = 80.0
 ROLL_SPEED = 70.0
 CAMERA_RADIUS = 0.05
 COLLISION_SPEED_MIN = 2.5
+REAL_SIZE_FACTOR = 0.05
 
 time_scale = TIME_SCALE_DEFAULT
 sim_jd = julian_date(datetime(2026, 1, 16, tzinfo=timezone.utc))
@@ -652,11 +667,12 @@ home_follow = False
 home_lat = AROSA_LAT
 home_lon = AROSA_LON
 labels_enabled = False
+use_real_size = False
 labels = []
 
 for ring, _, __ in orbit_rings:
     ring.enabled = labels_enabled
-for ring, _, __ in planet_rings:
+for ring, *_ in planet_rings:
     ring.enabled = labels_enabled
 
 
@@ -710,7 +726,7 @@ def set_view_from_earth(lat_deg, lon_deg, altitude=0.02):
 
 
 def input(key):
-    global time_scale, paused, use_absolute_mouse, last_mouse_pos, use_milky_way, focus_target, home_follow, labels_enabled, labels
+    global time_scale, paused, use_absolute_mouse, last_mouse_pos, use_milky_way, focus_target, home_follow, labels_enabled, labels, use_real_size
 
     if key == "space":
         paused = not paused
@@ -739,11 +755,14 @@ def input(key):
         time_scale = TIME_SCALE_DEFAULT
     elif key == "h":
         set_view_from_earth(AROSA_LAT, AROSA_LON)
+    elif key == "t":
+        use_real_size = not use_real_size
+        apply_size_scale(REAL_SIZE_FACTOR if use_real_size else 1.0)
     elif key == "n":
         labels_enabled = not labels_enabled
         for ring, _, __ in orbit_rings:
             ring.enabled = labels_enabled
-        for ring, _, __ in planet_rings:
+        for ring, *_ in planet_rings:
             ring.enabled = labels_enabled
         if labels_enabled:
             name_map = {
@@ -939,7 +958,7 @@ def update():
         else:
             ring.rotation_x = -body.orbit_inclination_deg
 
-    for ring, planet, tilt_deg in planet_rings:
+    for ring, planet, tilt_deg, _, __ in planet_rings:
         ring.position = planet.position
         ring.rotation_x = -tilt_deg
 
@@ -966,7 +985,7 @@ def update():
     hud.text = (
         f"Sim time (UTC): {sim_dt.strftime('%Y-%m-%d %H:%M')}\n"
         f"Time scale: {time_scale:.2f} days/sec ({status})\n"
-        f"Controls: WASD move, r/f up/down, z/x roll, mouse look ({mouse_status}), shift boost, q/e speed, space pause, r reset, h home, 1-9 focus, n names, esc mouse, f fullscreen, b background"
+        f"Controls: WASD move, r/f up/down, z/x roll, mouse look ({mouse_status}), shift boost, q/e speed, space pause, r reset, h home, 1-9 focus, n names, t real size, esc mouse, f fullscreen, b background"
     )
 
 
