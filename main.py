@@ -658,10 +658,8 @@ def apply_sun_only_lighting():
         entity.setLight(sun_light_np)
     for ring, *_ in planet_rings:
         ring.setLightOff()
-        ring.setLight(sun_light_np)
     for ring, _, __ in orbit_rings:
         ring.setLightOff()
-        ring.setLight(sun_light_np)
 
 
 def apply_size_scale(scale_factor):
@@ -725,7 +723,7 @@ labels = []
 for ring, _, __ in orbit_rings:
     ring.enabled = labels_enabled
 for ring, *_ in planet_rings:
-    ring.enabled = labels_enabled
+    ring.enabled = True
 
 apply_sun_only_lighting()
 
@@ -815,8 +813,6 @@ def input(key):
     elif key == "n":
         labels_enabled = not labels_enabled
         for ring, _, __ in orbit_rings:
-            ring.enabled = labels_enabled
-        for ring, *_ in planet_rings:
             ring.enabled = labels_enabled
         if labels_enabled:
             name_map = {
