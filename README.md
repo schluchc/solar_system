@@ -35,3 +35,7 @@ Planet textures and the Milky Way sky are from Solar System Scope (https://www.s
 Explosion sound: https://opengameart.org/content/explosion-0 (CC0).
 Earth heightmap: https://cdn.jsdelivr.net/gh/jeromeetienne/threex.planets@master/images/earthbump1k.jpg (NASA Visible Earth).
 HUD overlay: generated locally (assets/textures/hud_overlay.png).
+
+## Web deployment note
+
+The WebGL version expects assets under `web/assets`. If you update `assets/`, re-copy the textures/sounds into `web/assets` before deploying.

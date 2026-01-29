@@ -75,7 +75,7 @@ const makeRingGeometry = (innerRadius, outerRadius, segments = 128) => {
 const starfield = (() => {
   const geometry = new THREE.SphereGeometry(800, 64, 64);
   const material = new THREE.MeshBasicMaterial({
-    map: loadTexture("../assets/textures/8k_stars_milky_way.jpg"),
+    map: loadTexture("./assets/textures/8k_stars_milky_way.jpg"),
     side: THREE.BackSide,
     color: 0xd7dfef,
   });
@@ -296,7 +296,7 @@ const sun = new Body({
   name: "Sun",
   radius: 1.8,
   color: 0xffc857,
-  texture: "../assets/textures/2k_sun.jpg",
+  texture: "./assets/textures/2k_sun.jpg",
   rotationPeriodDays: 25.0,
 });
 
@@ -312,7 +312,7 @@ const planets = [
     rotationPeriodDays: 58.65,
     orbitParent: sun,
     color: 0xb4aaa0,
-    texture: "../assets/textures/2k_mercury.jpg",
+    texture: "./assets/textures/2k_mercury.jpg",
     elements: {
       a: 0.38709927,
       a_dot: 0.00000037,
@@ -337,7 +337,7 @@ const planets = [
     rotationPeriodDays: -243.02,
     orbitParent: sun,
     color: 0xe6c896,
-    texture: "../assets/textures/2k_venus_surface.jpg",
+    texture: "./assets/textures/2k_venus_surface.jpg",
     elements: {
       a: 0.72333566,
       a_dot: 0.0000039,
@@ -362,7 +362,7 @@ const planets = [
     rotationPeriodDays: 0.996,
     orbitParent: sun,
     color: 0x5a8cf0,
-    texture: "../assets/textures/2k_earth_daymap.jpg",
+    texture: "./assets/textures/2k_earth_daymap.jpg",
     elements: {
       a: 1.00000261,
       a_dot: 0.00000562,
@@ -387,7 +387,7 @@ const planets = [
     rotationPeriodDays: 1.025,
     orbitParent: sun,
     color: 0xd2785a,
-    texture: "../assets/textures/2k_mars.jpg",
+    texture: "./assets/textures/2k_mars.jpg",
     elements: {
       a: 1.52371034,
       a_dot: 0.00001847,
@@ -412,7 +412,7 @@ const planets = [
     rotationPeriodDays: 0.4125,
     orbitParent: sun,
     color: 0xd2a06e,
-    texture: "../assets/textures/2k_jupiter.jpg",
+    texture: "./assets/textures/2k_jupiter.jpg",
     elements: {
       a: 5.202887,
       a_dot: -0.00011607,
@@ -437,7 +437,7 @@ const planets = [
     rotationPeriodDays: 0.4458,
     orbitParent: sun,
     color: 0xdcc88c,
-    texture: "../assets/textures/2k_saturn.jpg",
+    texture: "./assets/textures/2k_saturn.jpg",
     elements: {
       a: 9.53667594,
       a_dot: -0.0012506,
@@ -462,7 +462,7 @@ const planets = [
     rotationPeriodDays: -0.7167,
     orbitParent: sun,
     color: 0xaadcdc,
-    texture: "../assets/textures/2k_uranus.jpg",
+    texture: "./assets/textures/2k_uranus.jpg",
     elements: {
       a: 19.18916464,
       a_dot: -0.00196176,
@@ -487,7 +487,7 @@ const planets = [
     rotationPeriodDays: 0.6708,
     orbitParent: sun,
     color: 0x5a78dc,
-    texture: "../assets/textures/2k_neptune.jpg",
+    texture: "./assets/textures/2k_neptune.jpg",
     elements: {
       a: 30.06992276,
       a_dot: 0.00026291,
@@ -517,7 +517,7 @@ const moon = new Body({
   orbitPeriodDays: 27.3217,
   orbitParent: earth,
   color: 0xc8c8d2,
-  texture: "../assets/textures/2k_moon.jpg",
+  texture: "./assets/textures/2k_moon.jpg",
   tidallyLocked: true,
 });
 
@@ -563,7 +563,7 @@ moonDefs.forEach(([name, parent, orbitRadiusAu, orbitPeriodDays, radius, orbitEc
 
 const planetRings = [];
 const ringDefs = [
-  [planets[5], 1.3, 2.6, 26.73, 0xffffff, "../assets/textures/2k_saturn_ring_alpha.png"],
+  [planets[5], 1.3, 2.6, 26.73, 0xffffff, "./assets/textures/2k_saturn_ring_alpha.png"],
   [planets[6], 1.2, 1.7, 97.77, 0xbecdd2, null],
   [planets[7], 1.3, 1.8, 28.32, 0xaab4c8, null],
 ];

@@ -18,5 +18,11 @@ http://localhost:8000/web/
 
 ## Notes
 
-- Textures are loaded from `../assets/textures`.
+- Assets are loaded from `./assets` (copied into `web/assets` for deployment).
 - Controls are listed in the in-page HUD.
+
+## Cloudflare Pages checklist
+
+1. Ensure `web/assets` exists with textures and sounds.
+2. Deploy the `web/` directory (no build command).
+3. If you update assets, re-copy them into `web/assets` before deploying.
