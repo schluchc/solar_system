@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Solar System WebGL</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./style.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="hud">
+      <div class="title">Solar System (WebGL)</div>
+      <div id="status"></div>
+      <div class="controls">
+        <span>Controls:</span>
+        <span>Click to look · Scroll zoom</span>
+        <span>W/A/S/D move · T/G up/down · Q/E speed · Space pause · R reset · 1–9 focus · V real size · N names</span>
+      </div>
+    </div>
+    <canvas id="scene"></canvas>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
