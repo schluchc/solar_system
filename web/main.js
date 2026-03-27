@@ -72,16 +72,185 @@ const makeRingGeometry = (innerRadius, outerRadius, segments = 128) => {
   return geometry;
 };
 
+// Background star sphere (far skybox)
 const starfield = (() => {
-  const geometry = new THREE.SphereGeometry(800, 64, 64);
+  const geometry = new THREE.SphereGeometry(1400, 64, 64);
   const material = new THREE.MeshBasicMaterial({
     map: loadTexture("./assets/textures/8k_stars_milky_way.jpg"),
     side: THREE.BackSide,
-    color: 0xd7dfef,
+    color: 0x8899bb,
   });
   const mesh = new THREE.Mesh(geometry, material);
   scene.add(mesh);
   return mesh;
+})();
+
+// 3-D Milky Way particle system
+const milkyWay = (() => {
+  const rng = (() => {
+    let s = 0x9e3779b9;
+    return () => {
+      s = Math.imul(s ^ (s >>> 16), 0x45d9f3b) >>> 0;
+      s = Math.imul(s ^ (s >>> 16), 0x45d9f3b) >>> 0;
+      return (s >>> 0) / 0xffffffff;
+    };
+  })();
+
+  const gaussRng = () => {
+    const u = 1 - rng();
+    const v = rng();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v);
+  };
+
+  // Particle counts per component
+  const N_DISK = 28000;
+  const N_ARMS = 22000;
+  const N_BULGE = 8000;
+  const N_HALO = 4000;
+  const TOTAL = N_DISK + N_ARMS + N_BULGE + N_HALO;
+
+  const positions = new Float32Array(TOTAL * 3);
+  const colors = new Float32Array(TOTAL * 3);
+  const sizes = new Float32Array(TOTAL);
+
+  // Galaxy geometry constants (scene units — starfield is r=1400, solar system ~r=200)
+  const DISK_R = 620;   // outer disk radius
+  const DISK_H = 28;    // disk scale height
+  const BULGE_R = 80;   // bulge radius
+  const HALO_R = 700;   // stellar halo
+
+  // Tilt the galaxy plane relative to the ecliptic (63° — roughly correct)
+  const GALAXY_TILT = 63 * DEG2RAD;
+
+  // Place solar system inside the disk, offset from center
+  const SOLAR_OFFSET_R = 260; // ~26 kly from galactic center in scene units
+
+  let idx = 0;
+
+  const setParticle = (x, y, z, r, g, b, size) => {
+    // Apply solar offset so the solar system is not at galactic center
+    const px = x + SOLAR_OFFSET_R;
+    // Apply galaxy tilt (rotate around X axis)
+    const cosT = Math.cos(GALAXY_TILT);
+    const sinT = Math.sin(GALAXY_TILT);
+    positions[idx * 3]     = px;
+    positions[idx * 3 + 1] = y * cosT - z * sinT;
+    positions[idx * 3 + 2] = y * sinT + z * cosT;
+    colors[idx * 3]     = r;
+    colors[idx * 3 + 1] = g;
+    colors[idx * 3 + 2] = b;
+    sizes[idx] = size;
+    idx++;
+  };
+
+  // --- Thin disk stars: blueish-white, exponential radial profile ---
+  for (let i = 0; i < N_DISK; i++) {
+    const r = DISK_R * Math.pow(rng(), 0.55);
+    const theta = rng() * TAU;
+    const h = gaussRng() * DISK_H;
+    const x = Math.cos(theta) * r;
+    const z = Math.sin(theta) * r;
+    // Mix cool and hot disk stars
+    const t = rng();
+    const [cr, cg, cb] = t < 0.5
+      ? [0.80 + rng() * 0.20, 0.85 + rng() * 0.15, 1.0]          // blue-white
+      : [1.0, 0.90 + rng() * 0.10, 0.70 + rng() * 0.20];           // warm yellow
+    const brightness = 0.4 + rng() * 0.6;
+    setParticle(x, h, z, cr * brightness, cg * brightness, cb * brightness, 0.8 + rng() * 1.2);
+  }
+
+  // --- Spiral arms: 4 arms with logarithmic spiral + dust lane color ---
+  const NUM_ARMS = 4;
+  const ARM_PITCH = 0.22; // radians of pitch angle
+  for (let i = 0; i < N_ARMS; i++) {
+    const armIndex = Math.floor(rng() * NUM_ARMS);
+    const armOffset = (armIndex / NUM_ARMS) * TAU;
+
+    // Logarithmic spiral: r = r0 * e^(b*theta)
+    const theta0 = rng() * TAU * 1.8; // how far around the spiral
+    const r = 60 + (DISK_R - 60) * (theta0 / (TAU * 1.8));
+    const spiralTheta = armOffset + theta0 + ARM_PITCH * Math.log(r / 60 + 1);
+
+    // Add scatter perpendicular to arm
+    const scatter = gaussRng() * (r * 0.10 + 12);
+    const scatterTheta = spiralTheta + (scatter / r);
+    const finalR = r + Math.abs(gaussRng()) * 15;
+
+    const x = Math.cos(scatterTheta) * finalR;
+    const z = Math.sin(scatterTheta) * finalR;
+    const h = gaussRng() * (DISK_H * 0.6);
+
+    // Arms are bluer/brighter (young hot stars and nebulae)
+    const nebula = rng() < 0.12; // occasional reddish nebula patch
+    const [cr, cg, cb] = nebula
+      ? [0.9 + rng() * 0.1, 0.4 + rng() * 0.3, 0.5 + rng() * 0.3]
+      : [0.6 + rng() * 0.4, 0.75 + rng() * 0.25, 1.0];
+    const brightness = 0.5 + rng() * 0.5;
+    setParticle(x, h, z, cr * brightness, cg * brightness, cb * brightness, 1.0 + rng() * 1.6);
+  }
+
+  // --- Central bulge: dense yellowish-orange spheroid ---
+  for (let i = 0; i < N_BULGE; i++) {
+    const r = BULGE_R * Math.pow(rng(), 0.4);
+    const theta = rng() * TAU;
+    const phi = Math.acos(2 * rng() - 1);
+    const x = r * Math.sin(phi) * Math.cos(theta);
+    const y = r * Math.cos(phi) * 0.55; // oblate
+    const z = r * Math.sin(phi) * Math.sin(theta);
+    const brightness = 0.6 + rng() * 0.4;
+    setParticle(x, y, z, 1.0 * brightness, 0.80 * brightness, 0.55 * brightness, 1.2 + rng() * 2.0);
+  }
+
+  // --- Stellar halo: sparse, metal-poor blue-white stars ---
+  for (let i = 0; i < N_HALO; i++) {
+    const r = BULGE_R + (HALO_R - BULGE_R) * Math.pow(rng(), 0.7);
+    const theta = rng() * TAU;
+    const phi = Math.acos(2 * rng() - 1);
+    const x = r * Math.sin(phi) * Math.cos(theta);
+    const y = r * Math.cos(phi) * 0.45;
+    const z = r * Math.sin(phi) * Math.sin(theta);
+    const brightness = 0.2 + rng() * 0.35;
+    setParticle(x, y, z, 0.75 * brightness, 0.85 * brightness, 1.0 * brightness, 0.5 + rng() * 0.8);
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  geometry.setAttribute("size", new THREE.Float32BufferAttribute(sizes, 1));
+
+  const material = new THREE.ShaderMaterial({
+    uniforms: {},
+    vertexColors: true,
+    vertexShader: /* glsl */`
+      attribute float size;
+      varying vec3 vColor;
+      void main() {
+        vColor = color;
+        vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = size * (300.0 / -mvPos.z);
+        gl_Position = projectionMatrix * mvPos;
+      }
+    `,
+    fragmentShader: /* glsl */`
+      varying vec3 vColor;
+      void main() {
+        float d = length(gl_PointCoord - 0.5) * 2.0;
+        float alpha = 1.0 - smoothstep(0.0, 1.0, d);
+        alpha = pow(alpha, 1.6);
+        if (alpha < 0.02) discard;
+        gl_FragColor = vec4(vColor, alpha * 0.85);
+      }
+    `,
+    transparent: true,
+    depthTest: false,   // always render as background — never intersect solar system objects
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+
+  const points = new THREE.Points(geometry, material);
+  points.renderOrder = -10; // draw before everything so planets always appear in front
+  scene.add(points);
+  return points;
 })();
 
 const sunLight = new THREE.PointLight(0xfff1da, 8.0, 0, 2);
@@ -663,6 +832,254 @@ for (let i = 0; i < 260; i += 1) {
   asteroids.push(asteroid);
 }
 
+// ---- Spacecraft -------------------------------------------------------
+
+const buildSpacecraftMesh = (type) => {
+  const group = new THREE.Group();
+  const S = 0.015; // base size unit
+  const metalMat = new THREE.MeshStandardMaterial({ color: 0xd0d4dc, roughness: 0.3, metalness: 0.8 });
+  const panelMat = new THREE.MeshStandardMaterial({ color: 0x1a3a8a, roughness: 0.5, metalness: 0.3 });
+  const goldMat  = new THREE.MeshStandardMaterial({ color: 0xc8941c, roughness: 0.3, metalness: 0.7 });
+  const foilMat  = new THREE.MeshStandardMaterial({ color: 0xd4a030, roughness: 0.2, metalness: 0.9 });
+  const dishMat  = new THREE.MeshStandardMaterial({ color: 0xe8e8e8, roughness: 0.15, metalness: 0.95, side: THREE.DoubleSide });
+
+  const addDish = (parent, r, yPos) => {
+    const d = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 8, 0, TAU, 0, Math.PI / 2.2), dishMat);
+    d.rotation.x = Math.PI;
+    d.position.y = yPos;
+    parent.add(d);
+  };
+
+  if (type === 'iss') {
+    // Main truss
+    group.add(new THREE.Mesh(new THREE.BoxGeometry(S * 22, S * 0.5, S * 0.5), metalMat));
+    // Habitation modules
+    for (let i = -1; i <= 1; i++) {
+      const mod = new THREE.Mesh(new THREE.CylinderGeometry(S * 0.85, S * 0.85, S * 3, 10), metalMat);
+      mod.rotation.z = Math.PI / 2;
+      mod.position.x = i * S * 2.8;
+      group.add(mod);
+    }
+    // Eight solar array wings
+    for (const sx of [-4, -2, 2, 4]) {
+      for (const sy of [-1, 1]) {
+        const panel = new THREE.Mesh(new THREE.BoxGeometry(S * 1.5, S * 0.04, S * 8), panelMat);
+        panel.position.set(sx * S, sy * S * 5, 0);
+        group.add(panel);
+      }
+    }
+  } else if (type === 'probe_dish') {
+    // Gold-foil bus
+    group.add(new THREE.Mesh(new THREE.BoxGeometry(S * 2.5, S * 2.5, S * 2.5), foilMat));
+    // High-gain dish
+    addDish(group, S * 4, S * 2);
+    // RTG boom + canister
+    const boom = new THREE.Mesh(new THREE.CylinderGeometry(S * 0.18, S * 0.18, S * 9, 6), goldMat);
+    boom.rotation.z = Math.PI / 2;
+    boom.position.x = -S * 5;
+    group.add(boom);
+    const rtg = new THREE.Mesh(new THREE.CylinderGeometry(S * 0.5, S * 0.5, S * 1.5, 6), goldMat);
+    rtg.rotation.z = Math.PI / 2;
+    rtg.position.x = -S * 10;
+    group.add(rtg);
+  } else if (type === 'probe_solar') {
+    // Juno: three large solar panel wings
+    group.add(new THREE.Mesh(new THREE.BoxGeometry(S * 2, S * 2, S * 2), foilMat));
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * TAU;
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(S * 11, S * 0.05, S * 2), panelMat);
+      panel.position.set(Math.cos(a) * S * 6, 0, Math.sin(a) * S * 6);
+      panel.rotation.y = a;
+      group.add(panel);
+    }
+    addDish(group, S * 2.5, S * 2);
+  } else if (type === 'telescope') {
+    // Hubble: cylinder body + two solar arrays
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(S * 1.4, S * 1.4, S * 6, 12), metalMat);
+    body.rotation.z = Math.PI / 2;
+    group.add(body);
+    for (const sy of [-1, 1]) {
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(S * 0.05, S * 4.5, S * 2), panelMat);
+      panel.position.y = sy * S * 5;
+      group.add(panel);
+    }
+  } else if (type === 'jwst') {
+    // Sunshield (tennis-court-sized kite)
+    group.add(new THREE.Mesh(new THREE.BoxGeometry(S * 14, S * 0.08, S * 9),
+      new THREE.MeshStandardMaterial({ color: 0xf0e6a0, roughness: 0.4, metalness: 0.5 })));
+    // Hexagonal primary mirror (gold)
+    const mirror = new THREE.Mesh(new THREE.CylinderGeometry(S * 3.2, S * 3.2, S * 0.4, 6),
+      new THREE.MeshStandardMaterial({ color: 0xd4a82a, roughness: 0.05, metalness: 1.0 }));
+    mirror.position.y = S * 2;
+    group.add(mirror);
+  }
+
+  return group;
+};
+
+class Spacecraft {
+  constructor(options) {
+    this.name = options.name;
+    this.size = 0.25; // used by focusOn() — drives camera stand-off distance
+    this.mesh = buildSpacecraftMesh(options.type);
+    this.orbitParent = options.orbitParent ?? null;
+    this.orbitRadiusFn = options.orbitRadiusFn ?? null;
+    this.orbitPeriodDays = options.orbitPeriodDays ?? null;
+    this.orbitInclinationRad = (options.orbitInclinationDeg ?? 0) * DEG2RAD;
+    this.orbitAngle = Math.random() * TAU;
+    this.isL2 = options.isL2 ?? false;
+    this.refJd = options.refJd ?? null;
+    this.refPos = options.refPos ? new THREE.Vector3(...options.refPos) : null;
+    this.velocity = options.velocity ? new THREE.Vector3(...options.velocity) : null;
+
+    // Navigation beacon — fixed screen size so the craft is findable from any distance
+    const bc = document.createElement('canvas');
+    bc.width = 64; bc.height = 64;
+    const bctx = bc.getContext('2d');
+    const grd = bctx.createRadialGradient(32, 32, 2, 32, 32, 30);
+    grd.addColorStop(0,   'rgba(160, 220, 255, 1.0)');
+    grd.addColorStop(0.4, 'rgba(80, 160, 255, 0.8)');
+    grd.addColorStop(1,   'rgba(0,  60, 200, 0.0)');
+    bctx.fillStyle = grd;
+    bctx.fillRect(0, 0, 64, 64);
+    const beacon = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: new THREE.CanvasTexture(bc),
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      sizeAttenuation: false, // constant screen size regardless of distance
+    }));
+    beacon.scale.setScalar(0.022); // ~20 px at 1080p
+    beacon.renderOrder = 5;
+    this.mesh.add(beacon);
+
+    scene.add(this.mesh);
+  }
+
+  step(dtDays, jd) {
+    if (this.velocity && this.refPos) {
+      // Linear heliocentric propagation (good for multi-year window)
+      const elapsed = jd - this.refJd;
+      this.mesh.position.copy(this.refPos).addScaledVector(this.velocity, elapsed);
+    } else if (this.isL2) {
+      // JWST: trail Earth at Sun-Earth L2 (~1% beyond Earth)
+      const dir = new THREE.Vector3().subVectors(earth.mesh.position, sun.mesh.position).normalize();
+      // L2 is 1 500 000 km from Earth; clamp to outside Earth's enlarged mesh
+      const l2 = scOrbit(1_500_000, earth, 6.0);
+      this.mesh.position.copy(earth.mesh.position).addScaledVector(dir, l2);
+    } else if (this.orbitParent && this.orbitPeriodDays) {
+      this.orbitAngle += TAU * (dtDays / this.orbitPeriodDays);
+      const r = this.orbitRadiusFn ? this.orbitRadiusFn() : 1.0;
+      const cosA = Math.cos(this.orbitAngle);
+      const sinA = Math.sin(this.orbitAngle);
+      const cosI = Math.cos(this.orbitInclinationRad);
+      const sinI = Math.sin(this.orbitInclinationRad);
+      this.mesh.position.copy(this.orbitParent.mesh.position).add(
+        new THREE.Vector3(cosA * r, sinA * sinI * r, sinA * cosI * r)
+      );
+    }
+    this.mesh.rotation.y += 0.4 * dtDays;
+  }
+}
+
+// Heliocentric positions at JD 2458849.5 (2026-01-16), scene units (1 AU = 5).
+// Derived from JPL Horizons ecliptic J2000 data; velocity = scene units/day.
+const SC_REF_JD = simJd;
+
+// Convert km from a body's centre to scene units, clamped to stay outside the
+// body's enlarged mesh so the spacecraft is always visible in both view modes.
+const scOrbit = (km, parent, minMult = 1.5) =>
+  Math.max((km / 149_600_000) * AU, parent.size * minMult);
+
+const spacecrafts = [
+  new Spacecraft({
+    name: "ISS",
+    type: "iss",
+    orbitParent: earth,
+    orbitRadiusFn: () => scOrbit(6_779, earth, 1.05),  // 408 km alt
+    orbitPeriodDays: 0.0625,
+    orbitInclinationDeg: 51.6,
+  }),
+  new Spacecraft({
+    name: "Hubble",
+    type: "telescope",
+    orbitParent: earth,
+    orbitRadiusFn: () => scOrbit(6_918, earth, 1.08), // 547 km alt
+    orbitPeriodDays: 0.066,
+    orbitInclinationDeg: 28.5,
+  }),
+  new Spacecraft({
+    name: "JWST",
+    type: "jwst",
+    isL2: true,
+  }),
+  new Spacecraft({
+    name: "Juno",
+    type: "probe_solar",
+    orbitParent: planets[4],
+    orbitRadiusFn: () => scOrbit(4_200, planets[4], 1.05), // perijove 4 200 km — inside Io's orbit
+    orbitPeriodDays: 53.5,
+    orbitInclinationDeg: 1.3,
+  }),
+  // --- Mars orbiters ---
+  new Spacecraft({
+    name: "MRO",
+    type: "probe_solar",
+    orbitParent: planets[3],
+    orbitRadiusFn: () => scOrbit(3_675, planets[3], 1.05), // 285 km alt, r=3 675 km
+    orbitPeriodDays: 0.083,
+    orbitInclinationDeg: 93.0,
+  }),
+  new Spacecraft({
+    name: "MAVEN",
+    type: "probe_solar",
+    orbitParent: planets[3],
+    orbitRadiusFn: () => scOrbit(6_690, planets[3], 1.3), // highly elliptical avg
+    orbitPeriodDays: 0.267,
+    orbitInclinationDeg: 75.0,
+  }),
+  // --- Mercury orbiter ---
+  new Spacecraft({
+    name: "BepiColombo",
+    type: "probe_dish",
+    orbitParent: planets[0],
+    orbitRadiusFn: () => scOrbit(3_430, planets[0], 1.05), // ~990 km alt
+    orbitPeriodDays: 0.127,
+    orbitInclinationDeg: 90.0,
+  }),
+  // --- Sun-grazing probe ---
+  new Spacecraft({
+    name: "Parker Solar Probe",
+    type: "probe_dish",
+    orbitParent: sun,
+    orbitRadiusFn: () => scOrbit(6_100_000, sun),   // perihelion 0.041 AU
+    orbitPeriodDays: 88.0,
+    orbitInclinationDeg: 3.4,
+  }),
+  // Deep-space probes: refPos in scene units, velocity in scene units/day
+  new Spacecraft({
+    name: "New Horizons",
+    type: "probe_dish",
+    refJd: SC_REF_JD,
+    refPos:    [ 115.6, -19.4, -260.0],  // ~57 AU
+    velocity:  [0.0143, -0.00246, -0.0322],
+  }),
+  new Spacecraft({
+    name: "Voyager 1",
+    type: "probe_dish",
+    refJd: SC_REF_JD,
+    refPos:   [-201.5,  467.5, -637.5],  // ~163 AU
+    velocity: [-0.0109, 0.0249, -0.0337],
+  }),
+  new Spacecraft({
+    name: "Voyager 2",
+    type: "probe_dish",
+    refJd: SC_REF_JD,
+    refPos:   [ 168.5, -358.0, -552.0],  // ~136 AU
+    velocity: [ 0.0112, -0.0208, -0.0361],
+  }),
+];
+
 const moveState = { forward: 0, right: 0, up: 0 };
 const moveVelocity = new THREE.Vector3();
 const baseMoveSpeed = 10.0;
@@ -745,6 +1162,17 @@ const nameMap = {
   Miranda: "Miranda",
   Triton: "Triton",
   Proteus: "Proteus",
+  ISS: "ISS",
+  Hubble: "Hubble",
+  JWST: "JWST",
+  Juno: "Juno",
+  MRO: "MRO",
+  MAVEN: "MAVEN",
+  BepiColombo: "BepiColombo",
+  "Parker Solar Probe": "Parker Solar Probe",
+  "New Horizons": "New Horizons",
+  "Voyager 1": "Voyager 1",
+  "Voyager 2": "Voyager 2",
 };
 
 const createLabelSprite = (text, isMoon) => {
@@ -789,10 +1217,16 @@ const toggleLabels = () => {
     });
     return;
   }
+  const planets9 = new Set(["Sun","Mercury","Venus","Earth","Mars","Jupiter","Saturn","Uranus","Neptune"]);
   bodies.forEach((body) => {
     const labelText = nameMap[body.name] ?? body.name;
-    const sprite = createLabelSprite(labelText, body.name !== "Sun" && body.name !== "Mercury" && body.name !== "Venus" && body.name !== "Earth" && body.name !== "Mars" && body.name !== "Jupiter" && body.name !== "Saturn" && body.name !== "Uranus" && body.name !== "Neptune");
+    const sprite = createLabelSprite(labelText, !planets9.has(body.name));
     labels.set(body, sprite);
+    labelsGroup.add(sprite);
+  });
+  spacecrafts.forEach((sc) => {
+    const sprite = createLabelSprite(sc.name, false);
+    labels.set(sc, sprite);
     labelsGroup.add(sprite);
   });
   orbitLines.forEach(({ line }) => {
@@ -814,6 +1248,10 @@ const applySizeScale = (scale) => {
     ring.lastInner = 0;
     ring.lastOuter = 0;
   });
+  // Spacecraft shrink less than planets when switching to real size,
+  // so they stay proportionally more visible (they are far smaller in reality).
+  const scScale = useRealSize ? REAL_SIZE_FACTOR : 1.0;
+  spacecrafts.forEach((sc) => sc.mesh.scale.setScalar(scScale));
 };
 
 const applyLook = () => {
@@ -864,6 +1302,22 @@ window.addEventListener("keydown", (event) => {
     toggleLabels();
   } else if (focusTargets[event.code]) {
     focusOn(focusTargets[event.code]);
+  } else if (event.code === "KeyI") {
+    focusOn(spacecrafts[0]); // ISS
+  } else if (event.code === "KeyH") {
+    focusOn(spacecrafts[1]); // Hubble
+  } else if (event.code === "KeyJ") {
+    focusOn(spacecrafts[2]); // JWST
+  } else if (event.code === "KeyU") {
+    focusOn(spacecrafts[3]); // Juno
+  } else if (event.code === "KeyM") {
+    focusOn(spacecrafts[4]); // MRO
+  } else if (event.code === "KeyO") {
+    focusOn(spacecrafts[5]); // MAVEN
+  } else if (event.code === "KeyB") {
+    focusOn(spacecrafts[6]); // BepiColombo
+  } else if (event.code === "KeyP") {
+    focusOn(spacecrafts[7]); // Parker Solar Probe
   } else if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
     boostActive = true;
   } else {
@@ -946,6 +1400,7 @@ const animate = () => {
     const dtDays = dt * timeScale;
     simJd += dtDays;
     bodies.forEach((body) => body.step(dtDays, simJd));
+    spacecrafts.forEach((sc) => sc.step(dtDays, simJd));
   }
 
   if (focusTarget) {
@@ -986,13 +1441,18 @@ const animate = () => {
 
   if (labelsEnabled) {
     labels.forEach((sprite, body) => {
-      const offset = new THREE.Vector3(0, body.size * 1.6 + 0.4, 0);
+      const yOff = body instanceof Spacecraft ? 0.35 : body.size * 1.6 + 0.4;
+      const offset = new THREE.Vector3(0, yOff, 0);
       sprite.position.copy(body.mesh.position).add(offset);
       const distance = camera.position.distanceTo(sprite.position);
       const scale = Math.max(0.6, Math.min(6.0, distance * 0.02));
       sprite.scale.set(scale * 1.4, scale * 0.55, 1);
     });
   }
+
+  // Keep Milky Way centred on camera so stars are always far in the background
+  milkyWay.position.copy(camera.position);
+  starfield.position.copy(camera.position);
 
   updateMovement(dt);
   applyLook();

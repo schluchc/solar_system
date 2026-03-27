@@ -1,2 +1,0 @@
-ursina==5.2.0
-screeninfo==0.8.1
