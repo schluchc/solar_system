@@ -1130,6 +1130,8 @@ const formatSimTime = (jd) => {
 const updateStatus = () => {
   const status = document.getElementById("status");
   status.textContent = `Sim time: ${formatSimTime(simJd)}\nSpeed: ${timeScale.toFixed(2)} days/sec (${paused ? "paused" : "running"})\nSize scale: ${useRealSize ? "real" : "enlarged"}`;
+  const pb = document.getElementById("btn-pause");
+  if (pb) pb.textContent = paused ? "▶" : "⏸";
 };
 
 // Real-world data shown in the info panel (hover a label when N is active).
@@ -1568,3 +1570,167 @@ const animate = () => {
 };
 
 animate();
+
+// ── Mobile / touch controls ────────────────────────────────────────────
+
+// Helper: find a touch by identifier in a TouchList
+const findTouch = (list, id) => { for (const t of list) if (t.identifier === id) return t; return null; };
+
+// Touch-look state (single finger on canvas → rotate camera)
+const touchLook = { id: null, prevX: 0, prevY: 0 };
+// Pinch-zoom state (two fingers on canvas → move forward/back)
+const touchPinch = { id0: null, id1: null, prevDist: 0 };
+
+renderer.domElement.addEventListener("touchstart", (e) => {
+  e.preventDefault();
+  // Use targetTouches so joystick touches (on a separate element) are excluded
+  if (e.targetTouches.length === 2) {
+    touchLook.id = null;
+    touchPinch.id0 = e.targetTouches[0].identifier;
+    touchPinch.id1 = e.targetTouches[1].identifier;
+    touchPinch.prevDist = Math.hypot(
+      e.targetTouches[1].clientX - e.targetTouches[0].clientX,
+      e.targetTouches[1].clientY - e.targetTouches[0].clientY,
+    );
+    return;
+  }
+  for (const t of e.changedTouches) {
+    if (touchLook.id === null) {
+      touchLook.id = t.identifier;
+      touchLook.prevX = t.clientX;
+      touchLook.prevY = t.clientY;
+    }
+  }
+}, { passive: false });
+
+renderer.domElement.addEventListener("touchmove", (e) => {
+  e.preventDefault();
+  if (e.targetTouches.length >= 2 && touchPinch.id0 !== null) {
+    const a = findTouch(e.touches, touchPinch.id0);
+    const b = findTouch(e.touches, touchPinch.id1);
+    if (a && b) {
+      const d = Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+      const dir = new THREE.Vector3();
+      camera.getWorldDirection(dir);
+      camera.position.addScaledVector(dir, (d - touchPinch.prevDist) * 0.08);
+      touchPinch.prevDist = d;
+    }
+    return;
+  }
+  for (const t of e.changedTouches) {
+    if (t.identifier === touchLook.id) {
+      lookState.yaw   += (t.clientX - touchLook.prevX) * lookState.sensitivity * 2.5;
+      lookState.pitch += (t.clientY - touchLook.prevY) * lookState.sensitivity * 2.5;
+      applyLook();
+      touchLook.prevX = t.clientX;
+      touchLook.prevY = t.clientY;
+    }
+  }
+}, { passive: false });
+
+const clearTouches = (e) => {
+  for (const t of e.changedTouches) {
+    if (t.identifier === touchLook.id) touchLook.id = null;
+    if (t.identifier === touchPinch.id0 || t.identifier === touchPinch.id1) {
+      touchPinch.id0 = null;
+      touchPinch.id1 = null;
+    }
+  }
+};
+renderer.domElement.addEventListener("touchend",    clearTouches, { passive: false });
+renderer.domElement.addEventListener("touchcancel", clearTouches, { passive: false });
+
+// ── Virtual joystick ──────────────────────────────────────────────────
+
+const joyBase = document.getElementById("joystick-base");
+const joyKnob = document.getElementById("joystick-knob");
+
+if (joyBase && joyKnob) {
+  const JOY_R = 52; // half-size of base in px
+  let joyId = null;
+
+  joyBase.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    joyId = e.changedTouches[0].identifier;
+  }, { passive: false });
+
+  joyBase.addEventListener("touchmove", (e) => {
+    e.preventDefault();
+    const t = findTouch(e.changedTouches, joyId);
+    if (!t) return;
+    const r = joyBase.getBoundingClientRect();
+    let dx = t.clientX - (r.left + r.width  / 2);
+    let dy = t.clientY - (r.top  + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > JOY_R) { dx = dx / len * JOY_R; dy = dy / len * JOY_R; }
+    joyKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    moveState.right =  dx / JOY_R;
+    moveState.up    = -dy / JOY_R; // screen-up = up
+  }, { passive: false });
+
+  const joyEnd = (e) => {
+    e.preventDefault();
+    joyId = null;
+    joyKnob.style.transform = "translate(-50%, -50%)";
+    moveState.right = 0;
+    moveState.up    = 0;
+  };
+  joyBase.addEventListener("touchend",    joyEnd, { passive: false });
+  joyBase.addEventListener("touchcancel", joyEnd, { passive: false });
+}
+
+// ── Up / Down hold-buttons ────────────────────────────────────────────
+
+
+
+// ── Toolbar tap buttons ───────────────────────────────────────────────
+
+const tapBtn = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener("click", fn); };
+
+tapBtn("btn-pause",  () => { paused = !paused; });
+tapBtn("btn-slower", () => { timeScale /= 1.25; });
+tapBtn("btn-faster", () => { timeScale *= 1.25; });
+tapBtn("btn-names",  () => { toggleLabels(); });
+
+// ── Planet focus panel ────────────────────────────────────────────────
+
+const focusPanel  = document.getElementById("focus-panel");
+const focusToggle = document.getElementById("btn-planets");
+
+if (focusPanel && focusToggle) {
+  const planetItems = [
+    ["Sun", sun], ["Mercury", planets[0]], ["Venus", planets[1]],
+    ["Earth", planets[2]], ["Mars", planets[3]], ["Jupiter", planets[4]],
+    ["Saturn", planets[5]], ["Uranus", planets[6]], ["Neptune", planets[7]],
+  ];
+
+  const scShort = { "Parker Solar Probe": "Parker", "BepiColombo": "Bepi.", "New Horizons": "N.Horiz." };
+  const scItems = spacecrafts.map((sc) => [scShort[sc.name] ?? sc.name, sc]);
+
+  let focusState = 0; // 0 = hidden · 1 = planets · 2 = spacecraft
+
+  const buildFocusPanel = () => {
+    focusPanel.innerHTML = "";
+    const items = focusState === 1 ? planetItems : scItems;
+    items.forEach(([label, body]) => {
+      const btn = document.createElement("button");
+      btn.className = "focus-btn";
+      btn.textContent = label;
+      btn.addEventListener("click", () => { focusOn(body); focusState = 0; focusPanel.hidden = true; });
+      focusPanel.appendChild(btn);
+    });
+    focusPanel.hidden = false;
+  };
+
+  focusToggle.addEventListener("click", () => {
+    focusState = (focusState + 1) % 3;
+    if (focusState === 0) { focusPanel.hidden = true; } else { buildFocusPanel(); }
+  });
+
+  document.addEventListener("touchstart", (e) => {
+    if (!focusPanel.hidden && !focusPanel.contains(e.target) && e.target !== focusToggle) {
+      focusState = 0;
+      focusPanel.hidden = true;
+    }
+  }, { passive: true });
+}

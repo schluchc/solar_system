@@ -25,6 +25,7 @@ body {
   width: 100%;
   height: 100%;
   display: block;
+  touch-action: none; /* let JS handle all touch gestures */
 }
 
 #hud {
@@ -75,4 +76,138 @@ body {
   #hud .title {
     font-size: 16px;
   }
+}
+
+/* ── Mobile controls ──────────────────────────────────────────────── */
+
+#mobile-ui {
+  display: none;
+  position: fixed;
+  inset: 0;
+  pointer-events: none; /* only interactive children catch touches */
+  z-index: 20;
+}
+
+/* Show on touch-primary devices; hide keyboard hint in HUD */
+@media (hover: none) and (pointer: coarse) {
+  #mobile-ui { display: block; }
+  #hud .controls { display: none; }
+  #hud { max-width: 200px; }
+}
+
+/* Bottom bar: flex row, joystick left, toolbar right — can never overlap */
+#mob-bottom {
+  position: absolute;
+  bottom: 28px;
+  left: 24px;
+  right: 24px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  pointer-events: none;
+}
+
+#joystick-zone {
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+#joystick-base {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  pointer-events: all;
+  touch-action: none;
+}
+
+#joystick-knob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: transform 0.05s;
+}
+
+/* Action toolbar — 3-column grid so 5 buttons wrap into 2 rows */
+#mob-toolbar {
+  display: grid;
+  grid-template-columns: repeat(3, 50px);
+  gap: 8px;
+  pointer-events: all;
+  flex-shrink: 0;
+}
+
+/* Planet focus popup */
+#focus-panel {
+  position: absolute;
+  bottom: calc(28px + 120px + 16px); /* above the bottom bar */
+  right: 24px;
+  gap: 6px;
+  padding: 10px;
+  background: var(--hud-bg);
+  border: 1px solid var(--hud-border);
+  border-radius: 12px;
+  backdrop-filter: blur(12px);
+  pointer-events: all;
+}
+
+#focus-panel:not([hidden]) {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* Shared button base */
+.mob-btn {
+  min-width: 50px;
+  height: 50px;
+  padding: 0 10px;
+  background: var(--hud-bg);
+  border: 1px solid var(--hud-border);
+  border-radius: 10px;
+  color: var(--hud-text);
+  font-family: inherit;
+  font-size: 18px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  pointer-events: all;
+}
+
+.mob-btn:active {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.focus-btn {
+  padding: 10px 6px;
+  background: transparent;
+  border: 1px solid var(--hud-border);
+  border-radius: 8px;
+  color: var(--hud-text);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  text-align: center;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.focus-btn:active {
+  background: rgba(255, 255, 255, 0.15);
 }

@@ -33,6 +33,28 @@
       </div>
     </div>
     <canvas id="scene"></canvas>
+
+    <!-- Mobile controls (hidden on non-touch via CSS) -->
+    <div id="mobile-ui">
+      <!-- Bottom bar: joystick left, toolbar right — flex prevents overlap -->
+      <div id="mob-bottom">
+        <div id="joystick-zone">
+          <div id="joystick-base">
+            <div id="joystick-knob"></div>
+          </div>
+        </div>
+        <div id="mob-toolbar">
+          <button class="mob-btn" id="btn-pause">⏸</button>
+          <button class="mob-btn" id="btn-slower" title="Slow time">−</button>
+          <button class="mob-btn" id="btn-faster" title="Speed up time">+</button>
+          <button class="mob-btn" id="btn-names">N</button>
+          <button class="mob-btn" id="btn-planets">⊙</button>
+        </div>
+      </div>
+      <!-- Focus popup (filled by JS, cycles planets → spacecraft → hidden) -->
+      <div id="focus-panel" hidden></div>
+    </div>
+
     <script type="module" src="./main.js"></script>
   </body>
 </html>
