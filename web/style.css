@@ -64,6 +64,7 @@ body {
   color: var(--hud-muted);
 }
 
+
 @media (max-width: 600px) {
   #hud {
     left: 12px;

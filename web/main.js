@@ -253,7 +253,7 @@ const milkyWay = (() => {
   return points;
 })();
 
-const sunLight = new THREE.PointLight(0xfff1da, 20.0, 0, 2);
+const sunLight = new THREE.PointLight(0xfff1da, 28.0, 0, 2);
 scene.add(sunLight);
 
 const ambient = new THREE.AmbientLight(0x2a3144, 1.4);
@@ -1089,7 +1089,7 @@ let boostActive = false;
 let useRealSize = false;
 let focusTarget = null;
 let focusOffset = null;
-let labelsEnabled = false;
+let labelsMode = 0; // 0 = off · 1 = names only · 2 = names + info
 const labels = new Map();
 const labelsGroup = new THREE.Group();
 scene.add(labelsGroup);
@@ -1130,6 +1130,47 @@ const formatSimTime = (jd) => {
 const updateStatus = () => {
   const status = document.getElementById("status");
   status.textContent = `Sim time: ${formatSimTime(simJd)}\nSpeed: ${timeScale.toFixed(2)} days/sec (${paused ? "paused" : "running"})\nSize scale: ${useRealSize ? "real" : "enlarged"}`;
+};
+
+// Real-world data shown in the info panel (hover a label when N is active).
+const bodyData = {
+  Sun:          { type: "Star",            diamKm: 1_392_700 },
+  Mercury:      { type: "Rocky planet",    diamKm: 4_879 },
+  Venus:        { type: "Rocky planet",    diamKm: 12_104 },
+  Earth:        { type: "Rocky planet",    diamKm: 12_742 },
+  Mars:         { type: "Rocky planet",    diamKm: 6_779 },
+  Jupiter:      { type: "Gas giant",       diamKm: 139_820 },
+  Saturn:       { type: "Gas giant",       diamKm: 116_460 },
+  Uranus:       { type: "Ice giant",       diamKm: 50_724 },
+  Neptune:      { type: "Ice giant",       diamKm: 49_244 },
+  Moon:         { type: "Moon",            diamKm: 3_474 },
+  Phobos:       { type: "Moon",            diamKm: 22 },
+  Deimos:       { type: "Moon",            diamKm: 12 },
+  Io:           { type: "Moon",            diamKm: 3_642 },
+  Europa:       { type: "Moon",            diamKm: 3_122 },
+  Ganymede:     { type: "Moon",            diamKm: 5_268 },
+  Callisto:     { type: "Moon",            diamKm: 4_821 },
+  Titan:        { type: "Moon",            diamKm: 5_150 },
+  Enceladus:    { type: "Moon",            diamKm: 504 },
+  Rhea:         { type: "Moon",            diamKm: 1_527 },
+  Iapetus:      { type: "Moon",            diamKm: 1_469 },
+  Dione:        { type: "Moon",            diamKm: 1_122 },
+  Tethys:       { type: "Moon",            diamKm: 1_062 },
+  Titania:      { type: "Moon",            diamKm: 1_578 },
+  Oberon:       { type: "Moon",            diamKm: 1_523 },
+  Ariel:        { type: "Moon",            diamKm: 1_158 },
+  Umbriel:      { type: "Moon",            diamKm: 1_169 },
+  Miranda:      { type: "Moon",            diamKm: 472 },
+  Triton:       { type: "Moon",            diamKm: 2_707 },
+  Proteus:      { type: "Moon",            diamKm: 420 },
+  ISS:          { type: "Spacecraft",      desc: "Low Earth orbit · ~408 km altitude" },
+  Hubble:       { type: "Space telescope", desc: "Low Earth orbit · ~540 km altitude" },
+  JWST:         { type: "Space telescope", desc: "Sun–Earth L2 · 1.5 M km from Earth" },
+  Juno:         { type: "Spacecraft",      desc: "Jupiter orbiter · arrived 2016" },
+  MRO:          { type: "Spacecraft",      desc: "Mars Reconnaissance Orbiter · since 2006" },
+  MAVEN:        { type: "Spacecraft",      desc: "Mars atmosphere mission · since 2014" },
+  BepiColombo:  { type: "Spacecraft",      desc: "Mercury orbiter · arrives 2025" },
+  "Parker Solar Probe": { type: "Spacecraft", desc: "Sun-grazing probe · closest ~6.9 M km" },
 };
 
 const nameMap = {
@@ -1175,63 +1216,124 @@ const nameMap = {
   "Voyager 2": "Voyager 2",
 };
 
-const createLabelSprite = (text, isMoon) => {
-  const canvas = document.createElement("canvas");
-  canvas.width = 256;
-  canvas.height = 96;
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "rgba(5, 8, 16, 0.65)";
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  if (ctx.roundRect) {
-    ctx.roundRect(10, 18, 236, 60, 12);
+const fmtPeriod = (days) => {
+  if (days == null) return "—";
+  const abs = Math.abs(days);
+  const retro = days < 0 ? " ↺" : "";
+  if (abs < 1) return `${(abs * 24).toFixed(1)} h${retro}`;
+  if (abs < 365.25) return `${abs.toFixed(1)} d${retro}`;
+  return `${(abs / 365.25).toFixed(2)} yr${retro}`;
+};
+
+const fmtOrbit = (au) => {
+  if (!au) return "—";
+  if (au < 0.01) return `${Math.round(au * 149_597_870).toLocaleString()} km`;
+  return `${au.toFixed(3)} AU`;
+};
+
+const getInfoRows = (body) => {
+  const data = bodyData[body.name] ?? {};
+  const rows = [];
+  if (data.type) rows.push(["Type", data.type]);
+  if (data.diamKm) rows.push(["Diameter", `${data.diamKm.toLocaleString()} km`]);
+  if (body instanceof Spacecraft) {
+    if (body.orbitParent) rows.push(["Orbits", body.orbitParent.name]);
+    if (data.desc) rows.push(["Info", data.desc]);
   } else {
-    ctx.rect(10, 18, 236, 60);
+    if (body.orbitRadiusAu) rows.push(["Orbit", fmtOrbit(body.orbitRadiusAu)]);
+    if (body.orbitPeriodDays != null) rows.push(["Year", fmtPeriod(body.orbitPeriodDays)]);
+    if (body.rotationPeriodDays != null)
+      rows.push(["Day", body.tidallyLocked ? "Tidally locked" : fmtPeriod(body.rotationPeriodDays)]);
   }
+  return rows;
+};
+
+const createLabelSprite = (text, isMoon, body, withInfo) => {
+  const W = 320;
+  const PAD = 12;
+  const NAME_H = 44;
+  const SEP_H = 10;
+  const ROW_H = 26;
+  const rows = withInfo && body ? getInfoRows(body) : [];
+  const H = PAD + NAME_H + (rows.length ? SEP_H + rows.length * ROW_H : 0) + PAD;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d");
+
+  // Background card
+  ctx.fillStyle = "rgba(5, 8, 16, 0.72)";
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.22)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(4, 4, W - 8, H - 8, 10);
+  else ctx.rect(4, 4, W - 8, H - 8);
   ctx.fill();
   ctx.stroke();
-  ctx.fillStyle = isMoon ? "rgba(200, 200, 210, 0.9)" : "rgba(255, 255, 255, 0.95)";
-  ctx.font = "28px 'Space Grotesk', sans-serif";
+
+  // Name
+  ctx.fillStyle = isMoon ? "rgba(200, 200, 215, 0.92)" : "rgba(255, 255, 255, 0.97)";
+  ctx.font = "bold 26px 'Space Grotesk', sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 4);
+  ctx.fillText(text, W / 2, PAD + NAME_H / 2);
+
+  if (rows.length) {
+    // Separator
+    const sepY = PAD + NAME_H + SEP_H / 2;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.14)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(PAD + 4, sepY);
+    ctx.lineTo(W - PAD - 4, sepY);
+    ctx.stroke();
+
+    // Rows
+    rows.forEach(([key, val], i) => {
+      const y = PAD + NAME_H + SEP_H + i * ROW_H + ROW_H / 2;
+      ctx.font = "17px 'Space Grotesk', sans-serif";
+      ctx.fillStyle = "rgba(160, 185, 220, 0.85)";
+      ctx.textAlign = "left";
+      ctx.fillText(key, PAD + 6, y);
+      ctx.fillStyle = "rgba(230, 238, 255, 0.95)";
+      ctx.textAlign = "right";
+      ctx.fillText(val, W - PAD - 6, y);
+    });
+  }
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
   const sprite = new THREE.Sprite(material);
   sprite.renderOrder = 10;
+  sprite.userData.aspect = W / H;
   return sprite;
 };
 
-const toggleLabels = () => {
-  labelsEnabled = !labelsEnabled;
-  orbitLinesEnabled = labelsEnabled;
-  if (!labelsEnabled) {
-    labels.forEach((sprite) => labelsGroup.remove(sprite));
-    labels.clear();
-    orbitLines.forEach(({ line }) => {
-      line.visible = false;
-    });
-    return;
-  }
+const buildLabels = () => {
+  labels.forEach((sprite) => labelsGroup.remove(sprite));
+  labels.clear();
+  if (labelsMode === 0) return;
+  const withInfo = labelsMode === 2;
   const planets9 = new Set(["Sun","Mercury","Venus","Earth","Mars","Jupiter","Saturn","Uranus","Neptune"]);
   bodies.forEach((body) => {
-    const labelText = nameMap[body.name] ?? body.name;
-    const sprite = createLabelSprite(labelText, !planets9.has(body.name));
+    const sprite = createLabelSprite(nameMap[body.name] ?? body.name, !planets9.has(body.name), body, withInfo);
     labels.set(body, sprite);
     labelsGroup.add(sprite);
   });
   spacecrafts.forEach((sc) => {
-    const sprite = createLabelSprite(sc.name, false);
+    const sprite = createLabelSprite(sc.name, false, sc, withInfo);
     labels.set(sc, sprite);
     labelsGroup.add(sprite);
   });
-  orbitLines.forEach(({ line }) => {
-    line.visible = true;
-  });
+};
+
+const toggleLabels = () => {
+  labelsMode = (labelsMode + 1) % 3;
+  orbitLinesEnabled = labelsMode > 0;
+  buildLabels();
+  orbitLines.forEach(({ line }) => { line.visible = labelsMode > 0; });
 };
 
 const applySizeScale = (scale) => {
@@ -1439,19 +1541,19 @@ const animate = () => {
 
   sunLight.position.copy(sun.mesh.position);
 
-  if (labelsEnabled) {
+  if (labelsMode > 0) {
     const realMult = useRealSize ? REAL_SIZE_FACTOR : 1.0;
     labels.forEach((sprite, body) => {
       const yOff = body instanceof Spacecraft
         ? 0.35 * realMult
         : body.size * 1.6 + 0.4 * realMult;
-      const offset = new THREE.Vector3(0, yOff, 0);
-      sprite.position.copy(body.mesh.position).add(offset);
+      sprite.position.copy(body.mesh.position).add(new THREE.Vector3(0, yOff, 0));
       const distance = camera.position.distanceTo(sprite.position);
       const scaleMax = useRealSize ? 0.3 : 6.0;
       const scaleMin = useRealSize ? 0.03 : 0.6;
       const scale = Math.max(scaleMin, Math.min(scaleMax, distance * 0.02 * realMult));
-      sprite.scale.set(scale * 1.4, scale * 0.55, 1);
+      const aspect = sprite.userData.aspect ?? (1.4 / 0.55);
+      sprite.scale.set(scale * 1.4, scale * 1.4 / aspect, 1);
     });
   }
 
