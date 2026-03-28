@@ -242,24 +242,24 @@ const milkyWay = (() => {
       }
     `,
     transparent: true,
-    depthTest: false,   // always render as background — never intersect solar system objects
+    depthTest: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
   });
 
   const points = new THREE.Points(geometry, material);
-  points.renderOrder = -10; // draw before everything so planets always appear in front
+  points.renderOrder = -10;
   scene.add(points);
   return points;
 })();
 
-const sunLight = new THREE.PointLight(0xfff1da, 8.0, 0, 2);
+const sunLight = new THREE.PointLight(0xfff1da, 20.0, 0, 2);
 scene.add(sunLight);
 
-const ambient = new THREE.AmbientLight(0x2a3144, 0.85);
+const ambient = new THREE.AmbientLight(0x2a3144, 1.4);
 scene.add(ambient);
 
-const fillLight = new THREE.DirectionalLight(0xa7b6cc, 0.5);
+const fillLight = new THREE.DirectionalLight(0xa7b6cc, 0.85);
 fillLight.position.set(-40, 20, -20);
 scene.add(fillLight);
 
@@ -1236,7 +1236,7 @@ const toggleLabels = () => {
 
 const applySizeScale = (scale) => {
   sizeScale = scale;
-  moveSpeed = baseMoveSpeed * (useRealSize ? 0.45 : 1.0);
+  moveSpeed = baseMoveSpeed * (useRealSize ? 0.005 : 1.0);
   bodies.forEach((body) => {
     body.size = body.baseSize * sizeScale;
     body.mesh.scale.setScalar(sizeScale);
@@ -1440,12 +1440,17 @@ const animate = () => {
   sunLight.position.copy(sun.mesh.position);
 
   if (labelsEnabled) {
+    const realMult = useRealSize ? REAL_SIZE_FACTOR : 1.0;
     labels.forEach((sprite, body) => {
-      const yOff = body instanceof Spacecraft ? 0.35 : body.size * 1.6 + 0.4;
+      const yOff = body instanceof Spacecraft
+        ? 0.35 * realMult
+        : body.size * 1.6 + 0.4 * realMult;
       const offset = new THREE.Vector3(0, yOff, 0);
       sprite.position.copy(body.mesh.position).add(offset);
       const distance = camera.position.distanceTo(sprite.position);
-      const scale = Math.max(0.6, Math.min(6.0, distance * 0.02));
+      const scaleMax = useRealSize ? 0.3 : 6.0;
+      const scaleMin = useRealSize ? 0.03 : 0.6;
+      const scale = Math.max(scaleMin, Math.min(scaleMax, distance * 0.02 * realMult));
       sprite.scale.set(scale * 1.4, scale * 0.55, 1);
     });
   }
