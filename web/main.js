@@ -1095,17 +1095,6 @@ const labelsGroup = new THREE.Group();
 scene.add(labelsGroup);
 let orbitLinesEnabled = false;
 
-const focusTargets = {
-  Digit1: sun,
-  Digit2: planets[0],
-  Digit3: planets[1],
-  Digit4: planets[2],
-  Digit5: planets[3],
-  Digit6: planets[4],
-  Digit7: planets[5],
-  Digit8: planets[6],
-  Digit9: planets[7],
-};
 
 const focusOn = (body) => {
   const size = body.size;
@@ -1173,6 +1162,9 @@ const bodyData = {
   MAVEN:        { type: "Spacecraft",      desc: "Mars atmosphere mission · since 2014" },
   BepiColombo:  { type: "Spacecraft",      desc: "Mercury orbiter · arrives 2025" },
   "Parker Solar Probe": { type: "Spacecraft", desc: "Sun-grazing probe · closest ~6.9 M km" },
+  "New Horizons": { type: "Spacecraft",    desc: "Pluto flyby 2015 · now in Kuiper Belt" },
+  "Voyager 1":  { type: "Spacecraft",      desc: "Interstellar space · launched 1977" },
+  "Voyager 2":  { type: "Spacecraft",      desc: "Interstellar space · launched 1977" },
 };
 
 const nameMap = {
@@ -1250,14 +1242,45 @@ const getInfoRows = (body) => {
   return rows;
 };
 
+// Break `txt` into lines that fit within `maxW` pixels (ctx font must be set).
+const wrapText = (ctx, txt, maxW) => {
+  const words = txt.split(/\s+/);
+  const lines = [];
+  let cur = "";
+  for (const w of words) {
+    const probe = cur ? cur + " " + w : w;
+    if (ctx.measureText(probe).width > maxW && cur) { lines.push(cur); cur = w; }
+    else cur = probe;
+  }
+  if (cur) lines.push(cur);
+  return lines;
+};
+
 const createLabelSprite = (text, isMoon, body, withInfo) => {
   const W = 320;
   const PAD = 12;
   const NAME_H = 44;
   const SEP_H = 10;
-  const ROW_H = 26;
-  const rows = withInfo && body ? getInfoRows(body) : [];
-  const H = PAD + NAME_H + (rows.length ? SEP_H + rows.length * ROW_H : 0) + PAD;
+  const LINE_H = 18; // height of one wrapped value line
+  const ROW_PAD = 8; // vertical padding inside each row
+
+  const rawRows = withInfo && body ? getInfoRows(body) : [];
+
+  // ── First pass: measure wrapped value lines so we can compute canvas height ──
+  const measCanvas = document.createElement("canvas");
+  const measCtx = measCanvas.getContext("2d");
+  measCtx.font = "17px 'Space Grotesk', sans-serif";
+
+  const processedRows = rawRows.map(([key, val]) => {
+    const keyW = measCtx.measureText(key).width;
+    const maxValW = W - 2 * PAD - 12 - keyW - 10;
+    const lines = wrapText(measCtx, val, maxValW);
+    const rowH = lines.length * LINE_H + ROW_PAD;
+    return { key, lines, rowH };
+  });
+
+  const totalInfoH = processedRows.reduce((s, r) => s + r.rowH, 0);
+  const H = PAD + NAME_H + (processedRows.length ? SEP_H + totalInfoH : 0) + PAD;
 
   const canvas = document.createElement("canvas");
   canvas.width = W;
@@ -1281,7 +1304,7 @@ const createLabelSprite = (text, isMoon, body, withInfo) => {
   ctx.textBaseline = "middle";
   ctx.fillText(text, W / 2, PAD + NAME_H / 2);
 
-  if (rows.length) {
+  if (processedRows.length) {
     // Separator
     const sepY = PAD + NAME_H + SEP_H / 2;
     ctx.strokeStyle = "rgba(255, 255, 255, 0.14)";
@@ -1291,16 +1314,23 @@ const createLabelSprite = (text, isMoon, body, withInfo) => {
     ctx.lineTo(W - PAD - 4, sepY);
     ctx.stroke();
 
-    // Rows
-    rows.forEach(([key, val], i) => {
-      const y = PAD + NAME_H + SEP_H + i * ROW_H + ROW_H / 2;
-      ctx.font = "17px 'Space Grotesk', sans-serif";
+    // ── Second pass: draw rows with wrapped values ──
+    ctx.font = "17px 'Space Grotesk', sans-serif";
+    ctx.textBaseline = "middle";
+    let curY = PAD + NAME_H + SEP_H;
+    processedRows.forEach(({ key, lines, rowH }) => {
+      // Key label — vertically centred on first value line
+      const firstLineY = curY + ROW_PAD / 2 + LINE_H / 2;
       ctx.fillStyle = "rgba(160, 185, 220, 0.85)";
       ctx.textAlign = "left";
-      ctx.fillText(key, PAD + 6, y);
+      ctx.fillText(key, PAD + 6, firstLineY);
+      // Value lines — right-aligned, stacked
       ctx.fillStyle = "rgba(230, 238, 255, 0.95)";
       ctx.textAlign = "right";
-      ctx.fillText(val, W - PAD - 6, y);
+      lines.forEach((line, li) => {
+        ctx.fillText(line, W - PAD - 6, curY + ROW_PAD / 2 + LINE_H / 2 + li * LINE_H);
+      });
+      curY += rowH;
     });
   }
 
@@ -1404,24 +1434,6 @@ window.addEventListener("keydown", (event) => {
     applySizeScale(useRealSize ? REAL_SIZE_FACTOR : 1.0);
   } else if (event.code === "KeyN") {
     toggleLabels();
-  } else if (focusTargets[event.code]) {
-    focusOn(focusTargets[event.code]);
-  } else if (event.code === "KeyI") {
-    focusOn(spacecrafts[0]); // ISS
-  } else if (event.code === "KeyH") {
-    focusOn(spacecrafts[1]); // Hubble
-  } else if (event.code === "KeyJ") {
-    focusOn(spacecrafts[2]); // JWST
-  } else if (event.code === "KeyU") {
-    focusOn(spacecrafts[3]); // Juno
-  } else if (event.code === "KeyM") {
-    focusOn(spacecrafts[4]); // MRO
-  } else if (event.code === "KeyO") {
-    focusOn(spacecrafts[5]); // MAVEN
-  } else if (event.code === "KeyB") {
-    focusOn(spacecrafts[6]); // BepiColombo
-  } else if (event.code === "KeyP") {
-    focusOn(spacecrafts[7]); // Parker Solar Probe
   } else if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
     boostActive = true;
   } else {
@@ -1692,33 +1704,39 @@ tapBtn("btn-slower", () => { timeScale /= 1.25; });
 tapBtn("btn-faster", () => { timeScale *= 1.25; });
 tapBtn("btn-names",  () => { toggleLabels(); });
 
-// ── Planet focus panel ────────────────────────────────────────────────
+// ── Shared focus data ─────────────────────────────────────────────────
+
+const planetItems = [
+  ["Sun", sun], ["Mercury", planets[0]], ["Venus", planets[1]],
+  ["Earth", planets[2]], ["Mars", planets[3]], ["Jupiter", planets[4]],
+  ["Saturn", planets[5]], ["Uranus", planets[6]], ["Neptune", planets[7]],
+];
+
+const scShort = { "Parker Solar Probe": "Parker", "BepiColombo": "Bepi.", "New Horizons": "N.Horiz." };
+const scItems = spacecrafts.map((sc) => [scShort[sc.name] ?? sc.name, sc]);
+
+const fillPanel = (panel, items, onPick) => {
+  panel.innerHTML = "";
+  items.forEach(([label, body]) => {
+    const btn = document.createElement("button");
+    btn.className = "focus-btn";
+    btn.textContent = label;
+    btn.addEventListener("click", () => { focusOn(body); onPick(); });
+    panel.appendChild(btn);
+  });
+};
+
+// ── Mobile planet focus panel (⊙ button) ──────────────────────────────
 
 const focusPanel  = document.getElementById("focus-panel");
 const focusToggle = document.getElementById("btn-planets");
 
 if (focusPanel && focusToggle) {
-  const planetItems = [
-    ["Sun", sun], ["Mercury", planets[0]], ["Venus", planets[1]],
-    ["Earth", planets[2]], ["Mars", planets[3]], ["Jupiter", planets[4]],
-    ["Saturn", planets[5]], ["Uranus", planets[6]], ["Neptune", planets[7]],
-  ];
-
-  const scShort = { "Parker Solar Probe": "Parker", "BepiColombo": "Bepi.", "New Horizons": "N.Horiz." };
-  const scItems = spacecrafts.map((sc) => [scShort[sc.name] ?? sc.name, sc]);
-
   let focusState = 0; // 0 = hidden · 1 = planets · 2 = spacecraft
 
   const buildFocusPanel = () => {
-    focusPanel.innerHTML = "";
     const items = focusState === 1 ? planetItems : scItems;
-    items.forEach(([label, body]) => {
-      const btn = document.createElement("button");
-      btn.className = "focus-btn";
-      btn.textContent = label;
-      btn.addEventListener("click", () => { focusOn(body); focusState = 0; focusPanel.hidden = true; });
-      focusPanel.appendChild(btn);
-    });
+    fillPanel(focusPanel, items, () => { focusState = 0; focusPanel.hidden = true; });
     focusPanel.hidden = false;
   };
 
@@ -1733,4 +1751,41 @@ if (focusPanel && focusToggle) {
       focusPanel.hidden = true;
     }
   }, { passive: true });
+}
+
+// ── Desktop focus panel ───────────────────────────────────────────────
+
+const deskPlanetsBtn   = document.getElementById("desk-btn-planets");
+const deskCraftBtn     = document.getElementById("desk-btn-craft");
+const deskPlanetsPanel = document.getElementById("desk-planets-panel");
+const deskCraftPanel   = document.getElementById("desk-craft-panel");
+
+if (deskPlanetsBtn && deskCraftBtn) {
+  const closeDesktop = () => {
+    deskPlanetsPanel.hidden = true;
+    deskCraftPanel.hidden = true;
+  };
+
+  deskPlanetsBtn.addEventListener("click", () => {
+    const opening = deskPlanetsPanel.hidden;
+    closeDesktop();
+    if (opening) {
+      fillPanel(deskPlanetsPanel, planetItems, closeDesktop);
+      deskPlanetsPanel.hidden = false;
+    }
+  });
+
+  deskCraftBtn.addEventListener("click", () => {
+    const opening = deskCraftPanel.hidden;
+    closeDesktop();
+    if (opening) {
+      fillPanel(deskCraftPanel, scItems, closeDesktop);
+      deskCraftPanel.hidden = false;
+    }
+  });
+
+  document.addEventListener("click", (e) => {
+    const inDesktop = e.target.closest("#desktop-focus");
+    if (!inDesktop) closeDesktop();
+  });
 }

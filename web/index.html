@@ -28,10 +28,17 @@
       <div class="controls">
         <span>Controls:</span>
         <span>Click to look · Scroll zoom</span>
-        <span>W/A/S/D move · T/G up/down · Q/E speed · Space pause · R reset · 1–9 focus planets · N names</span>
-        <span>Spacecraft: I=ISS · H=Hubble · J=JWST · U=Juno · M=MRO · O=MAVEN · B=BepiColombo · P=Parker</span>
+        <span>W/A/S/D move · T/G up/down · Q/E speed · Space pause · R reset · N names</span>
       </div>
     </div>
+    <!-- Desktop focus panel (hidden on touch devices via CSS) -->
+    <div id="desktop-focus">
+      <button class="desk-toggle" id="desk-btn-planets">Planets ▾</button>
+      <div id="desk-planets-panel" hidden></div>
+      <button class="desk-toggle" id="desk-btn-craft">Spacecraft ▾</button>
+      <div id="desk-craft-panel" hidden></div>
+    </div>
+
     <canvas id="scene"></canvas>
 
     <!-- Mobile controls (hidden on non-touch via CSS) -->

@@ -66,6 +66,52 @@ body {
 }
 
 
+/* ── Desktop focus panel ───────────────────────────────────────────── */
+
+#desktop-focus {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 10;
+}
+
+.desk-toggle {
+  padding: 8px 14px;
+  background: var(--hud-bg);
+  border: 1px solid var(--hud-border);
+  border-radius: 10px;
+  color: var(--hud-text);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  text-align: left;
+}
+
+.desk-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+#desk-planets-panel:not([hidden]),
+#desk-craft-panel:not([hidden]) {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 8px;
+  background: var(--hud-bg);
+  border: 1px solid var(--hud-border);
+  border-radius: 10px;
+  backdrop-filter: blur(10px);
+}
+
+/* Hide desktop focus panel on touch devices */
+@media (hover: none) and (pointer: coarse) {
+  #desktop-focus { display: none; }
+}
+
 @media (max-width: 600px) {
   #hud {
     left: 12px;
